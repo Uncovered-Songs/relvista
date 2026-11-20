@@ -1,0 +1,108 @@
+import { tableTitle, type DiagramModel, type Table } from '@relvista/core';
+import { typeLabel } from '../svg/TableSvg.js';
+import type { ReactElement } from 'react';
+import { CloseIcon } from './icons.js';
+
+function flags(c: Table['columns'][number]): string[] {
+  const f: string[] = [];
+  if (c.pk) f.push('PK');
+  if (c.isFk) f.push('FK');
+  if (c.unique && !c.pk) f.push('unique');
+  if (c.notNull && !c.pk) f.push('not null');
+  if (c.increment) f.push('increment');
+  return f;
+}
+
+/** Details of a clicked table: note, columns with their settings and notes, indexes, refs. */
+export function SideCard({
+  table,
+  model,
+  onClose,
+}: {
+  table: Table;
+  model: DiagramModel;
+  onClose(): void;
+}): ReactElement {
+  const refs = model.refs.filter((r) => r.from.tableId === table.id || r.to.tableId === table.id);
+  const group = table.groupId ? model.groups.find((g) => g.id === table.groupId) : undefined;
+  return (
+    <aside className="rv-sidecard nodrag nopan nowheel" aria-label={`Table ${tableTitle(table)}`}>
+      <header className="rv-sidecard-head">
+        <div>
+          <h3>{tableTitle(table)}</h3>
+          {table.alias || group ? (
+            <p className="rv-sidecard-sub">
+              {table.alias ? `alias ${table.alias}` : null}
+              {table.alias && group ? ' · ' : null}
+              {group ? `group ${group.name}` : null}
+            </p>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="rv-tb-button"
+          title="Close"
+          aria-label="Close"
+          onClick={onClose}
+        >
+          <CloseIcon />
+        </button>
+      </header>
+      <div className="rv-sidecard-body">
+        {table.note ? <p className="rv-sidecard-note">{table.note}</p> : null}
+        <ul className="rv-sidecard-cols">
+          {table.columns.map((c) => (
+            <li key={c.name}>
+              <div className="rv-sidecard-col">
+                <span className="rv-sidecard-name">{c.name}</span>
+                <span className="rv-sidecard-type">{typeLabel(c)}</span>
+              </div>
+              {flags(c).length || c.default ? (
+                <div className="rv-sidecard-flags">
+                  {flags(c).map((f) => (
+                    <span key={f} className="rv-chip">
+                      {f}
+                    </span>
+                  ))}
+                  {c.default ? (
+                    <span className="rv-chip">default {String(c.default.value)}</span>
+                  ) : null}
+                </div>
+              ) : null}
+              {c.note ? <p className="rv-sidecard-colnote">{c.note}</p> : null}
+            </li>
+          ))}
+        </ul>
+        {table.indexes.length ? (
+          <>
+            <h4>Indexes</h4>
+            <ul className="rv-sidecard-list">
+              {table.indexes.map((ix, i) => (
+                <li key={i}>
+                  <code>({ix.columns.map((c) => c.value).join(', ')})</code>
+                  {ix.pk ? ' pk' : ix.unique ? ' unique' : ''}
+                  {ix.name ? ` · ${ix.name}` : ''}
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+        {refs.length ? (
+          <>
+            <h4>References</h4>
+            <ul className="rv-sidecard-list">
+              {refs.map((r) => (
+                <li key={r.id}>
+                  <code>
+                    {r.from.tableId}.{r.from.columns.join(',')} {r.relation} {r.to.tableId}.
+                    {r.to.columns.join(',')}
+                  </code>
+                </li>
+              ))}
+            </ul>
+          </>
+        ) : null}
+      </div>
+    </aside>
+  );
+}

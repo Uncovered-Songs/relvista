@@ -8,3 +8,4 @@ export {
   columnTypeLabel,
   tableTitle,
 } from './measure.js';
+export { layoutDiagram, layoutDiagramSync, type AutoLayoutOptions } from './layout.js';
