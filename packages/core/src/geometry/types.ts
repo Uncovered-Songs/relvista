@@ -15,6 +15,12 @@ export interface Box {
 export interface NodeGeometry extends Box {
   id: string;
   kind: 'table' | 'note';
+  /**
+   * Detail level this table was measured at, when it differs from the layout's `detailLevel`
+   * (a saved `collapsed: true` node is laid out at 'names'). Renderers draw the table, and attach
+   * its refs, at this level.
+   */
+  detailLevel?: DetailLevel;
 }
 
 /** A TableGroup's enclosing rectangle, computed around its visible tables. */
@@ -22,7 +28,11 @@ export interface GroupGeometry extends Box {
   id: string;
 }
 
-/** Optional polyline route for a ref (from ELK). Renderers may ignore it and route themselves. */
+/**
+ * Optional polyline route for a ref (from ELK). Renderers may ignore it and route themselves.
+ * `points[0]` lies on the edge of the `ref.from` table, the last point on the `ref.to` table,
+ * whatever direction the layout engine used internally.
+ */
 export interface EdgeGeometry {
   id: string;
   points: Array<{ x: number; y: number }>;
@@ -49,4 +59,9 @@ export interface LayoutOptions {
   saved?: Partial<ViewLayout> | null;
   /** Defaults to estimateTextWidth (deterministic, works in Node/SSR). */
   measure?: TextMeasure;
+  /**
+   * Width / height of the viewport the diagram will be shown in (default 1.6, clamped to
+   * 0.25..4). Disconnected parts of the schema and sticky notes are packed to match it.
+   */
+  aspectRatio?: number;
 }

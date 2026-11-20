@@ -1,0 +1,15 @@
+{
+  "$schema": "https://uncovered-songs.github.io/relvista/schemas/layout-1.json",
+  "settings": {
+    "detailLevel": "all"
+  },
+  "version": 1,
+  "views": {
+    "*": {
+      "nodes": {
+        "public.posts": { "x": 0, "y": 150 },
+        "public.users": { "x": 360, "y": 0 }
+      }
+    }
+  }
+}

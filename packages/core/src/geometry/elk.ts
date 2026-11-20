@@ -97,14 +97,42 @@ function loadWorker(workerUrl: string): Promise<ElkApi> {
  */
 export async function runElk(graph: ElkNode, workerUrl?: string): Promise<ElkNode> {
   if (workerUrl && typeof Worker !== 'undefined') {
+    const pending = loadWorker(workerUrl);
     try {
-      const elk = await loadWorker(workerUrl);
-      return await elk.layout(graph);
+      return await (await pending).layout(graph);
     } catch {
+      // Drop the (possibly dead) worker so the next call starts a fresh one; never leak it.
       workers.delete(workerUrl);
+      pending.then((elk) => elk.terminateWorker?.()).catch(() => undefined);
     }
   }
   return (await loadInline()).layout(graph);
+}
+
+/**
+ * Spacing, set on the root and on every group (compound) node: ELK reads spacing from the node
+ * whose children it places, so without repeating them here tables inside a group end up 15-40px
+ * apart, too close for the cardinality markers at both ends of a ref.
+ */
+function spacingOptions(): Record<string, string> {
+  return {
+    'elk.spacing.nodeNode': String(NODE_GAP),
+    'elk.layered.spacing.nodeNodeBetweenLayers': String(LAYER_GAP),
+    'elk.spacing.edgeNode': '24',
+    'elk.spacing.edgeEdge': '14',
+    'elk.layered.spacing.edgeNodeBetweenLayers': '24',
+    'elk.layered.spacing.edgeEdgeBetweenLayers': '14',
+    'elk.spacing.componentComponent': String(NODE_GAP),
+  };
+}
+
+/** Edge-to-table spacing inside groups (less than METRICS.groupPadding, see buildElkGraph). */
+const GROUP_EDGE_NODE = 12;
+
+/** Terminates every cached ELK Web Worker (apps that unmount all diagrams, tests). */
+export function disposeElkWorkers(): void {
+  for (const p of workers.values()) p.then((elk) => elk.terminateWorker?.()).catch(() => undefined);
+  workers.clear();
 }
 
 function layoutOptions(direction: Direction): Record<string, string> {
@@ -114,19 +142,16 @@ function layoutOptions(direction: Direction): Record<string, string> {
     'elk.edgeRouting': 'ORTHOGONAL',
     'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
     'elk.padding': '[top=0,left=0,bottom=0,right=0]',
-    'elk.spacing.nodeNode': String(NODE_GAP),
-    'elk.layered.spacing.nodeNodeBetweenLayers': String(LAYER_GAP),
-    'elk.spacing.edgeNode': '24',
-    'elk.spacing.edgeEdge': '14',
-    'elk.layered.spacing.edgeNodeBetweenLayers': '24',
-    'elk.layered.spacing.edgeEdgeBetweenLayers': '14',
-    'elk.spacing.componentComponent': String(NODE_GAP),
+    ...spacingOptions(),
     'elk.separateConnectedComponents': 'true',
     // Measured on examples/14-large: network simplex + free ordering give ~25% less area and
     // shorter refs than Brandes-Koepf + model order (docs/design/autolayout.md).
     'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
     'elk.layered.considerModelOrder.strategy': 'NONE',
     'elk.layered.unnecessaryBendpoints': 'true',
+    // More crossing-minimisation sweeps: on examples/14-large (7 groups) the picture is ~10%
+    // smaller and closer to landscape (1.22 vs 1.09) for ~50ms more; small diagrams are unchanged.
+    'elk.layered.thoroughness': '30',
     'elk.randomSeed': '1',
   };
 }
@@ -165,8 +190,9 @@ export function buildElkGraph(
     edgeIds.set(id, e.id);
     return {
       id,
-      sources: [portOf(e.source, e.sourceRow, 'E')],
-      targets: [portOf(e.target, e.targetRow, self ? 'E' : 'W')],
+      // Self refs loop on the west side, away from the east ports other refs leave from.
+      sources: [portOf(e.source, e.sourceRow, self ? 'W' : 'E')],
+      targets: [portOf(e.target, e.targetRow, 'W')],
     };
   });
 
@@ -200,6 +226,11 @@ export function buildElkGraph(
       id: `g${grp.index}`,
       layoutOptions: {
         'elk.padding': `[top=${pad + head},left=${pad},bottom=${pad},right=${pad}]`,
+        ...spacingOptions(),
+        // Refs leaving a group run through its padding at this distance from the tables; with the
+        // root's 24 (= groupPadding) they would lie exactly on the drawn group border.
+        'elk.spacing.edgeNode': String(GROUP_EDGE_NODE),
+        'elk.layered.spacing.edgeNodeBetweenLayers': String(GROUP_EDGE_NODE),
       },
       children: grp.members.map(tableNode),
     });

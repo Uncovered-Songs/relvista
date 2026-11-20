@@ -1,0 +1,44 @@
+/* relvista docs: Infima overrides. */
+:root {
+  --ifm-color-primary: #2f6fed;
+  --ifm-color-primary-dark: #1b5fe8;
+  --ifm-color-primary-darker: #175ad9;
+  --ifm-color-primary-darkest: #134ab3;
+  --ifm-color-primary-light: #4a82ef;
+  --ifm-color-primary-lighter: #578bf0;
+  --ifm-color-primary-lightest: #7ea6f4;
+  --ifm-code-font-size: 92%;
+  --ifm-font-family-base:
+    Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ifm-heading-font-weight: 650;
+  --docusaurus-highlighted-code-line-bg: rgba(47, 111, 237, 0.1);
+  --relvista-accent: #14a38b;
+}
+
+[data-theme='dark'] {
+  --ifm-color-primary: #6f9bff;
+  --ifm-color-primary-dark: #4f84ff;
+  --ifm-color-primary-darker: #3f79ff;
+  --ifm-color-primary-darkest: #0f57ff;
+  --ifm-color-primary-light: #8fb2ff;
+  --ifm-color-primary-lighter: #9fbdff;
+  --ifm-color-primary-lightest: #cfdeff;
+  --ifm-background-color: #0f1217;
+  --ifm-background-surface-color: #161a21;
+  --ifm-navbar-background-color: #12161c;
+  --docusaurus-highlighted-code-line-bg: rgba(111, 155, 255, 0.15);
+  --relvista-accent: #3cc7ae;
+}
+
+.footer--dark {
+  --ifm-footer-background-color: #12161c;
+}
+
+.gallery-stats {
+  font-size: 0.85rem;
+  color: var(--ifm-color-emphasis-700);
+}
+
+details > summary code {
+  font-size: 0.85em;
+}

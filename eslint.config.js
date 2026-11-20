@@ -12,6 +12,9 @@ export default defineConfig(
     '**/build/',
     '**/.docusaurus/',
     '**/.turbo/',
+    'packages/docusaurus-theme/lib/',
+    'apps/docs/test-results/',
+    'apps/docs/playwright-report/',
   ]),
   js.configs.recommended,
   // Non-type-checked preset: fast, no tsconfig project service needed.

@@ -61,9 +61,14 @@ export function rowCenterOffset(row: number): number {
     : METRICS.headerHeight + row * METRICS.rowHeight + METRICS.rowHeight / 2;
 }
 
+/** How far a self ref's loop reaches out from the table (room for both markers). */
+export const SELF_LOOP: number = METRICS.selfLoopReach;
+
 /** Which sides of `a` and `b` a ref between them attaches to. */
 export function chooseSides(a: Box, b: Box, selfRef: boolean): [HSide, HSide] {
-  if (selfRef) return ['right', 'right'];
+  // Self refs loop on the left, away from the right-hand ports other refs usually leave from
+  // (core's ELK layout reserves the room there).
+  if (selfRef) return ['left', 'left'];
   if (b.x >= a.x + a.width + FACING_GAP) return ['right', 'left'];
   if (a.x >= b.x + b.width + FACING_GAP) return ['left', 'right'];
   // Stacked or overlapping horizontally: both on the side that keeps the loop short.
@@ -124,11 +129,13 @@ export function routeBetween(
   b: Point,
   bSide: HSide,
   style: EdgeStyle,
+  /** Length of the straight run out of each table (longer for self-ref loops). */
+  stub: number = STUB,
 ): { points: Point[]; path: string } {
   const da = dirOf(aSide);
   const db = dirOf(bSide);
-  const a1 = { x: a.x + da * STUB, y: a.y };
-  const b1 = { x: b.x + db * STUB, y: b.y };
+  const a1 = { x: a.x + da * stub, y: a.y };
+  const b1 = { x: b.x + db * stub, y: b.y };
   if (style === 'straight') {
     const points = [a, a1, b1, b];
     return { points, path: roundedPath(points, 0) };
@@ -153,7 +160,7 @@ export function routeBetween(
     if (Math.abs(a.y - b.y) < 1) {
       // Self ref on one row: a small loop below the row.
       const y = a.y + METRICS.rowHeight / 2 + 6;
-      points = [a, { x, y: a.y }, { x, y }, { x: b.x + db * (STUB / 2), y }, b];
+      points = [a, { x, y: a.y }, { x, y }, { x: b.x + db * (stub / 2), y }, b];
     } else points = [a, { x, y: a.y }, { x, y: b.y }, b];
   }
   return { points, path: roundedPath(points) };
@@ -172,18 +179,92 @@ export function tableIndex(model: DiagramModel): Map<string, Table> {
   return new Map(model.tables.map((t) => [t.id, t]));
 }
 
+/**
+ * Detail level a table is drawn at: its own (`NodeGeometry.detailLevel`, e.g. a saved collapsed
+ * node) or the diagram's.
+ */
+export function nodeDetail(
+  geometry: DiagramGeometry,
+  id: string,
+  detailLevel: DetailLevel,
+): DetailLevel {
+  return geometry.nodes[id]?.detailLevel ?? detailLevel;
+}
+
+/** Distance from a point to the nearest vertical edge of a box. */
+function edgeDistance(p: Point, box: Box): number {
+  return Math.min(Math.abs(p.x - box.x), Math.abs(p.x - (box.x + box.width)));
+}
+
+/** Vertical offsets (px) of a ref's two ends from their row centres, when ports are shared. */
+export interface EndOffsets {
+  from: number;
+  to: number;
+}
+
+/**
+ * Gap between the ends of refs that leave the same port (table, row, side), so each cardinality
+ * marker sits on its own line. Two ends at ±6 keep both markers inside the row (26px).
+ */
+export const PORT_FAN = 12;
+
+/** Offsets for `n` ends sharing one port, top to bottom, staying inside the row where possible. */
+export function fanOffsets(n: number): number[] {
+  if (n < 2) return [0];
+  const step = Math.min(PORT_FAN, (METRICS.rowHeight - 2) / (n - 1));
+  return Array.from({ length: n }, (_, i) => round((i - (n - 1) / 2) * step));
+}
+
+/**
+ * Moves the end `pts[0]` of an orthogonal polyline by `dy`, keeping it orthogonal: the first
+ * (horizontal) segment moves with it when a vertical segment follows; otherwise the line jogs
+ * back half way along that segment.
+ */
+function shiftStart(pts: Point[], dy: number): Point[] {
+  if (!dy || pts.length < 2) return pts;
+  const [p0, p1] = [pts[0]!, pts[1]!];
+  const horizontal = Math.abs(p1.y - p0.y) < 0.5;
+  if (!horizontal) return [{ x: p0.x, y: p0.y + dy }, ...pts.slice(1)];
+  const p2 = pts[2];
+  if (p2 && Math.abs(p2.x - p1.x) < 0.5 && Math.abs(p2.y - p1.y) > Math.abs(dy) + 1)
+    return [{ x: p0.x, y: p0.y + dy }, { x: p1.x, y: p1.y + dy }, ...pts.slice(2)];
+  const mx = (p0.x + p1.x) / 2;
+  return [{ x: p0.x, y: p0.y + dy }, { x: mx, y: p0.y + dy }, { x: mx, y: p0.y }, ...pts.slice(1)];
+}
+
+function shiftEnds(pts: Point[], off: EndOffsets): Point[] {
+  const a = shiftStart(pts, off.from);
+  return shiftStart([...a].reverse(), off.to).reverse();
+}
+
 /** Routes one ref, or null when one of its tables has no geometry. */
-export function routeRef(ref: Ref, ctx: RouteContext, tables: Map<string, Table>): RefRoute | null {
+export function routeRef(
+  ref: Ref,
+  ctx: RouteContext,
+  tables: Map<string, Table>,
+  offsets: EndOffsets = { from: 0, to: 0 },
+): RefRoute | null {
   const ta = tables.get(ref.from.tableId);
   const tb = tables.get(ref.to.tableId);
   const ga = ctx.geometry.nodes[ref.from.tableId];
   const gb = ctx.geometry.nodes[ref.to.tableId];
   if (!ta || !tb || !ga || !gb) return null;
-  const rowA = rowIndexOf(ta, ref.from.columns[0], ctx.detailLevel);
-  const rowB = rowIndexOf(tb, ref.to.columns[0], ctx.detailLevel);
+  const rowA = rowIndexOf(ta, ref.from.columns[0], ga.detailLevel ?? ctx.detailLevel);
+  const rowB = rowIndexOf(tb, ref.to.columns[0], gb.detailLevel ?? ctx.detailLevel);
+  const self = ref.from.tableId === ref.to.tableId;
 
-  const pre = ctx.usePoints === false ? undefined : ctx.geometry.edges[ref.id]?.points;
+  // ELK self loops are tiny stubs; self refs are always routed here, with a wider loop.
+  let pre = ctx.usePoints === false || self ? undefined : ctx.geometry.edges[ref.id]?.points;
   if (pre && pre.length >= 2 && pre.every((p) => Number.isFinite(p.x) && Number.isFinite(p.y))) {
+    // Contract: points run ref.from → ref.to. Accept the reverse order too (older geometry).
+    const head = pre[0]!;
+    const tail = pre[pre.length - 1]!;
+    if (
+      edgeDistance(head, ga) + edgeDistance(tail, gb) >
+      edgeDistance(head, gb) + edgeDistance(tail, ga)
+    )
+      pre = [...pre].reverse();
+    if (offsets.from || offsets.to) pre = shiftEnds(pre, offsets);
     const p0 = pre[0]!;
     const p1 = pre[1]!;
     const pn = pre[pre.length - 1]!;
@@ -207,10 +288,16 @@ export function routeRef(ref: Ref, ctx: RouteContext, tables: Map<string, Table>
     };
   }
 
-  const [sa, sb] = chooseSides(ga, gb, ref.from.tableId === ref.to.tableId);
-  const a = { x: sa === 'right' ? ga.x + ga.width : ga.x, y: ga.y + rowCenterOffset(rowA) };
-  const b = { x: sb === 'right' ? gb.x + gb.width : gb.x, y: gb.y + rowCenterOffset(rowB) };
-  const { points, path } = routeBetween(a, sa, b, sb, ctx.edgeStyle);
+  const [sa, sb] = chooseSides(ga, gb, self);
+  const a = {
+    x: sa === 'right' ? ga.x + ga.width : ga.x,
+    y: ga.y + rowCenterOffset(rowA) + offsets.from,
+  };
+  const b = {
+    x: sb === 'right' ? gb.x + gb.width : gb.x,
+    y: gb.y + rowCenterOffset(rowB) + offsets.to,
+  };
+  const { points, path } = routeBetween(a, sa, b, sb, ctx.edgeStyle, self ? SELF_LOOP : STUB);
   return {
     id: ref.id,
     points,
@@ -220,12 +307,51 @@ export function routeRef(ref: Ref, ctx: RouteContext, tables: Map<string, Table>
   };
 }
 
+/**
+ * Routes every ref. Refs whose ends meet at the same port (same table, row and side) are fanned
+ * out vertically (`fanOffsets`) so each end keeps its own cardinality marker; the ends are ordered
+ * by where their lines go (upper line on top), so the fanned lines do not cross.
+ */
 export function routeAll(ctx: RouteContext): Map<string, RefRoute> {
   const tables = tableIndex(ctx.model);
   const out = new Map<string, RefRoute>();
   for (const ref of ctx.model.refs) {
     const r = routeRef(ref, ctx, tables);
     if (r) out.set(ref.id, r);
+  }
+  // Ends per port. A self ref on one row is drawn as one loop and keeps its own two ends.
+  const ports = new Map<string, { ref: Ref; end: 'from' | 'to'; towards: number }[]>();
+  for (const ref of ctx.model.refs) {
+    const r = out.get(ref.id);
+    if (!r) continue;
+    if (ref.from.tableId === ref.to.tableId && r.from.row === r.to.row) continue;
+    for (const end of ['from', 'to'] as const) {
+      const e = r[end];
+      const tableId = ref[end].tableId;
+      const key = `${tableId}\u0000${e.row}\u0000${e.side}\u0000${Math.round(e.y)}`;
+      // Where the line heads: the first point off this end's row, else the other end.
+      const pts = end === 'from' ? r.points : [...r.points].reverse();
+      const off = pts.find((p) => Math.abs(p.y - e.y) > 0.5) ?? pts[pts.length - 1]!;
+      let list = ports.get(key);
+      if (!list) ports.set(key, (list = []));
+      list.push({ ref, end, towards: off.y });
+    }
+  }
+  const offsets = new Map<string, EndOffsets>();
+  for (const list of ports.values()) {
+    if (list.length < 2) continue;
+    list.sort((a, b) => a.towards - b.towards || (a.ref.id < b.ref.id ? -1 : 1));
+    const offs = fanOffsets(list.length);
+    list.forEach((item, i) => {
+      const o = offsets.get(item.ref.id) ?? { from: 0, to: 0 };
+      o[item.end] = offs[i]!;
+      offsets.set(item.ref.id, o);
+    });
+  }
+  for (const [id, o] of offsets) {
+    const ref = ctx.model.refs.find((r) => r.id === id)!;
+    const r = routeRef(ref, ctx, tables, o);
+    if (r) out.set(id, r);
   }
   return out;
 }

@@ -20,6 +20,8 @@ export interface LayoutNode {
   height: number;
   /** Group this table belongs to, when the group is part of the graph. */
   groupId: string | null;
+  /** Set when the node was measured at another level than the layout's (saved `collapsed`). */
+  detailLevel?: DetailLevel;
 }
 
 export interface LayoutEdge {
@@ -32,6 +34,8 @@ export interface LayoutEdge {
   /** Visible column row index on each side, or HEADER_ROW. */
   sourceRow: number;
   targetRow: number;
+  /** True when `source` is the ref's `to` side, i.e. engine routes run to → from. */
+  reversed: boolean;
 }
 
 export interface LayoutGroup {
@@ -87,6 +91,7 @@ export function prepareGraph(model: DiagramModel, opts: PrepareOptions): LayoutG
       width: positive(saved?.w) ? saved.w : size.width,
       height: positive(saved?.h) ? saved.h : size.height,
       groupId: table.groupId && groupIds.has(table.groupId) ? table.groupId : null,
+      ...(level !== opts.detailLevel ? { detailLevel: level } : {}),
     };
     nodes.push(node);
     nodeById.set(node.id, node);
@@ -136,6 +141,7 @@ export function prepareGraph(model: DiagramModel, opts: PrepareOptions): LayoutG
       target: child.tableId,
       sourceRow: rowOf(parent.tableId, parent.columns),
       targetRow: rowOf(child.tableId, child.columns),
+      reversed: ref.fkSide === 'from',
     });
   }
   return { nodes, nodeById, edges, groups };

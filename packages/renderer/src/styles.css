@@ -193,13 +193,19 @@
 
 /* minimap */
 .rv-viewer .rv-minimap {
-  width: 168px;
-  height: 112px;
-  margin: 10px;
+  width: 120px;
+  height: 80px;
+  margin: 12px;
+  padding: 0;
+  opacity: 0.88;
+  transition: opacity 120ms ease;
   border: 1px solid var(--rv-ui-border);
   border-radius: 8px;
   overflow: hidden;
   box-shadow: var(--rv-ui-shadow);
+}
+.rv-viewer .rv-minimap:hover {
+  opacity: 1;
 }
 .rv-viewer .rv-minimap svg {
   width: 100%;
@@ -507,6 +513,30 @@
   justify-content: center;
   color: var(--rv-ui-muted);
   pointer-events: none;
+}
+
+/* --- narrow viewers (phones): title at the bottom, compact toolbar ---------------------- */
+.rv-viewer--narrow .rv-title {
+  top: auto;
+  bottom: 10px;
+  max-width: calc(100% - 20px);
+}
+.rv-viewer--narrow .rv-toolbar {
+  left: 10px;
+  justify-content: flex-end;
+}
+/* Pinch zooms on touch screens; printing from a phone is rare. */
+.rv-viewer--narrow [data-rv-item='zoom'],
+.rv-viewer--narrow [data-rv-item='print'] {
+  display: none;
+}
+.rv-viewer--narrow .rv-tb-select {
+  min-width: 0;
+  flex: 0 1 auto;
+}
+.rv-viewer--narrow .rv-tb-select select {
+  max-width: 96px;
+  text-overflow: ellipsis;
 }
 
 @media (prefers-reduced-motion: reduce) {

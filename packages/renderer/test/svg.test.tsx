@@ -171,7 +171,8 @@ Note n { 'hello world' }
     const ordersEnd = ref.from.tableId === 'public.users' ? route.to : route.from;
     const users = geo.nodes['public.users']!;
     expect(usersEnd.x).toBe(users.width);
-    expect(usersEnd.y).toBe(rowCenterOffset(0));
+    // users.id is shared by several refs: their ends fan out inside the row.
+    expect(Math.abs(usersEnd.y - rowCenterOffset(0))).toBeLessThan(13);
     expect(usersEnd.side).toBe('right');
     expect(ordersEnd.x).toBe(600);
     expect(ordersEnd.y).toBe(100 + rowCenterOffset(1));
@@ -185,7 +186,7 @@ Note n { 'hello world' }
     expect(chooseSides(a, { ...a, y: 300 }, false)[0]).toBe(
       chooseSides(a, { ...a, y: 300 }, false)[1],
     );
-    expect(chooseSides(a, a, true)).toEqual(['right', 'right']);
+    expect(chooseSides(a, a, true)).toEqual(['left', 'left']);
   });
 
   it('draws tables at the measured size', () => {

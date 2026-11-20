@@ -164,7 +164,7 @@ function DiagramSvgInner({
               key={t.id}
               table={t}
               box={box}
-              detailLevel={detailLevel}
+              detailLevel={box.detailLevel ?? detailLevel}
               dimmed={lit ? !lit.tables.has(t.id) : false}
               highlighted={lit ? (highlight?.includes(t.id) ?? false) : false}
               highlightColumns={lit?.columns.get(t.id) ?? null}

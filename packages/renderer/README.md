@@ -17,5 +17,8 @@ import '@relvista/renderer/styles.css'; // includes React Flow's CSS
   dagre layout first then ELK, saved positions from the layout file, hover highlight, table
   details card, toolbar (zoom, fit, fullscreen, SVG/PNG export, print, open in editor).
 
+The interactive viewer is built on [React Flow](https://reactflow.dev) (MIT, by xyflow); its
+attribution badge is hidden in the canvas and credited here instead.
+
 Colours are `--rv-*` CSS variables (light and dark palettes in `styles.css`; dark mode via
 `data-rv-color-mode="dark"`), with inline fallbacks so a bare SVG renders correctly.

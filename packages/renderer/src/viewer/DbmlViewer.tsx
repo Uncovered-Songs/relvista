@@ -27,20 +27,23 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
   type CSSProperties,
+  type KeyboardEvent as ReactKeyboardEvent,
   type ReactElement,
 } from 'react';
 import { layoutAsync, layoutSync, moveNodes } from '../geometry.js';
 import { ColorContext } from '../svg/context.js';
-import { highlightSets, routeAll, rowIndexOf, type EdgeStyle } from '../svg/routing.js';
+import { highlightSets, nodeDetail, routeAll, rowIndexOf, type EdgeStyle } from '../svg/routing.js';
 import { colorResolver, safeColor, type ColorMode } from '../theme.js';
 import { ViewerContext, handleId, type ViewerState } from './context.js';
 import { editorLink } from './editorLink.js';
 import { AlertIcon } from './icons.js';
 import { nodeTypes, type FlowNode, type GroupFlowNode } from './nodes.js';
+import { fitViewport, initialViewport, type Padding } from './initialView.js';
 import { edgeTypes, type RefFlowEdge } from './RefEdge.js';
 import { SideCard } from './SideCard.js';
 import { DEFAULT_TOOLBAR, Toolbar, type ExportKind, type ToolbarItem } from './Toolbar.js';
@@ -66,8 +69,11 @@ export interface DbmlViewerProps {
   detailLevel?: DetailLevel;
   /** Overrides `layout.settings.theme.edgeStyle`. Default orthogonal. */
   edgeStyle?: EdgeStyle;
-  /** Show the minimap. Default true. */
-  minimap?: boolean;
+  /**
+   * Show the minimap. Default 'auto': shown for diagrams of 8 or more tables in viewers at least
+   * 600px wide.
+   */
+  minimap?: boolean | 'auto';
   /**
    * URL of `elkjs/lib/elk-worker.min.js`; when set (and `Worker` exists) auto-layout runs in a Web
    * Worker. Without it ELK runs in-process.
@@ -89,6 +95,37 @@ export function DbmlViewer(props: DbmlViewerProps): ReactElement {
   );
 }
 
+/** Room for the title and toolbar overlays at the top, a small margin elsewhere. */
+const PAD = { top: 64, right: 28, bottom: 28, left: 28 } as const;
+/** Minimap size (px) and its distance from the viewer's bottom-right corner. */
+const MINIMAP = { width: 120, height: 80, margin: 12 } as const;
+/** Below this width the viewer counts as narrow (phones): no minimap, compact chrome. */
+const NARROW = 600;
+/** Fewest tables for the 'auto' minimap. */
+const MINIMAP_MIN_TABLES = 8;
+/**
+ * The first view never zooms out further than this (column text at 12.5 × 0.85 ≈ 10.6px); bigger
+ * diagrams open readable on their densest corner and pan. Phones get a little more overview.
+ */
+const MIN_INITIAL_ZOOM = 0.85;
+const MIN_INITIAL_ZOOM_NARROW = 0.75;
+const MAX_FIT_ZOOM = 1.25;
+
+/** A title such as `schema.dbml` without its file extension, for export file names. */
+export function exportBaseName(name: string): string {
+  return name.replace(/\.dbml(\.layout\.json)?$/i, '') || name;
+}
+
+/** Errors in source order (file, line, column). */
+export function sortDiagnostics(list: readonly Diagnostic[]): Diagnostic[] {
+  return [...list].sort(
+    (a, b) =>
+      (a.file ?? '').localeCompare(b.file ?? '') ||
+      a.start.line - b.start.line ||
+      a.start.column - b.start.column,
+  );
+}
+
 function sourceKey(source: CompileInput): string {
   return typeof source === 'string' ? source : JSON.stringify([source.entry, source.files]);
 }
@@ -107,38 +144,56 @@ function useGeometry(
   model: DiagramModel | null,
   saved: ViewLayoutOverride | null,
   detailLevel: DetailLevel,
+  aspectRatio: number | undefined,
   workerUrl?: string | URL,
-): DiagramGeometry | null {
+): { geometry: DiagramGeometry | null; final: boolean } {
   const options = useMemo<LayoutOptions>(
-    () => ({ detailLevel, saved: saved as Partial<ViewLayout> | null }),
-    [detailLevel, saved],
+    () => ({
+      detailLevel,
+      saved: saved as Partial<ViewLayout> | null,
+      ...(aspectRatio ? { aspectRatio } : {}),
+    }),
+    [detailLevel, saved, aspectRatio],
   );
+  const runs = useRef(0);
   const sync = useMemo(() => (model ? layoutSync(model, options) : null), [model, options]);
-  const [late, setLate] = useState<{ for: DiagramGeometry; geometry: DiagramGeometry } | null>(
-    null,
-  );
+  const [late, setLate] = useState<{
+    for: DiagramGeometry;
+    geometry: DiagramGeometry | null;
+  } | null>(null);
   useEffect(() => {
     if (!model || !sync || hasAllPositions(model, saved)) return;
     let alive = true;
-    let p: Promise<DiagramGeometry> | null = null;
-    try {
-      p = layoutAsync(model, { ...options, engine: 'elk', ...(workerUrl ? { workerUrl } : {}) });
-    } catch {
-      p = null;
-    }
-    p?.then(
-      (geometry) => {
-        if (alive) setLate({ for: sync, geometry });
-      },
-      () => {
-        // keep the sync layout
-      },
-    );
+    const run = () => {
+      let p: Promise<DiagramGeometry> | null = null;
+      try {
+        p = layoutAsync(model, { ...options, engine: 'elk', ...(workerUrl ? { workerUrl } : {}) });
+      } catch {
+        p = null;
+      }
+      p?.then(
+        (geometry) => {
+          if (alive) setLate({ for: sync, geometry });
+        },
+        () => {
+          // keep the sync layout
+          if (alive) setLate({ for: sync, geometry: null });
+        },
+      );
+      if (!p) setLate({ for: sync, geometry: null });
+    };
+    // The first layout starts at once; later ones (typing in an editor, switching views quickly)
+    // wait a moment so superseded ELK runs are never started.
+    const t = runs.current++ === 0 ? null : setTimeout(run, 150);
+    if (!t) run();
     return () => {
       alive = false;
+      if (t) clearTimeout(t);
     };
   }, [model, sync, saved, options, workerUrl]);
-  return late && late.for === sync ? late.geometry : sync;
+  const done = !!late && late.for === sync;
+  const final = !sync || !model || hasAllPositions(model, saved) || done;
+  return { geometry: (done ? late.geometry : null) ?? sync, final };
 }
 
 function buildNodes(
@@ -161,6 +216,7 @@ function buildNodes(
       selectable: false,
       connectable: false,
       deletable: false,
+      focusable: false,
     });
   }
   for (const t of model.tables) {
@@ -172,12 +228,18 @@ function buildNodes(
       position: { x: g.x, y: g.y },
       width: g.width,
       height: g.height,
-      data: { table: t, w: g.width, h: g.height },
+      data: {
+        table: t,
+        w: g.width,
+        h: g.height,
+        ...(g.detailLevel ? { detail: g.detailLevel } : {}),
+      },
       draggable,
       selectable: false,
       connectable: false,
       deletable: false,
-      ariaLabel: `Table ${t.name}`,
+      focusable: true,
+      ariaLabel: `Table ${t.name}. Press Enter for details.`,
     });
   }
   return out;
@@ -200,7 +262,7 @@ function ViewerInner({
   draggable = true,
   detailLevel,
   edgeStyle,
-  minimap = true,
+  minimap = 'auto',
   workerUrl,
   className,
   style,
@@ -214,7 +276,10 @@ function ViewerInner({
   const [good, setGood] = useState<DiagramModel | null>(compiled.model);
   if (compiled.model && compiled.model !== good) setGood(compiled.model);
   const model = compiled.model ?? good;
-  const errors = compiled.diagnostics.filter((d) => d.severity === 'error');
+  const errors = useMemo(
+    () => sortDiagnostics(compiled.diagnostics.filter((d) => d.severity === 'error')),
+    [compiled],
+  );
 
   const diagRef = useRef(onDiagnostics);
   diagRef.current = onDiagnostics;
@@ -222,14 +287,55 @@ function ViewerInner({
     diagRef.current?.(compiled.diagnostics);
   }, [compiled]);
 
+  // --- size (minimap, initial zoom, packing) ------------------------------------------------
+  const [size, setSize] = useState<{ width: number; height: number } | null>(null);
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const read = () => {
+      const r = el.getBoundingClientRect();
+      if (r.width > 0 && r.height > 0)
+        setSize((s) =>
+          s && Math.abs(s.width - r.width) < 1 && Math.abs(s.height - r.height) < 1
+            ? s
+            : { width: r.width, height: r.height },
+        );
+    };
+    read();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+  // The viewport shape the layout packs for: taken once (re-packing on every resize would move
+  // the tables around under the user), at a coarse step so near-equal sizes share a layout.
+  const [aspect, setAspect] = useState<number | undefined>(undefined);
+  if (aspect === undefined && size) {
+    const avail = {
+      w: size.width - PAD.left - PAD.right,
+      h: Math.max(1, size.height - PAD.top - PAD.bottom),
+    };
+    setAspect(Math.round((avail.w / avail.h) * 4) / 4 || 0.25);
+  }
+  const narrow = !!size && size.width < NARROW;
+
   // --- view ----------------------------------------------------------------------------------
   const [viewName, setViewName] = useState(view ?? DEFAULT_VIEW);
   useEffect(() => setViewName(view ?? DEFAULT_VIEW), [view]);
+  const unknownView =
+    !!model && viewName !== DEFAULT_VIEW && !model.views.some((v) => v.name === viewName);
+  useEffect(() => {
+    if (!unknownView) return;
+    console.warn(`relvista: unknown view "${viewName}"; showing all tables`);
+    setViewName(DEFAULT_VIEW);
+  }, [unknownView, viewName]);
   const viewModel = useMemo(
     () => (model && viewName !== DEFAULT_VIEW ? (selectView(model, viewName) ?? model) : model),
     [model, viewName],
   );
   const viewNames = useMemo(() => model?.views.map((v) => v.name) ?? [], [model]);
+  const emptyView =
+    !!viewModel && viewModel.tables.length === 0 && viewModel.stickyNotes.length === 0;
 
   // --- layout --------------------------------------------------------------------------------
   const detail: DetailLevel = detailLevel ?? layout?.settings?.detailLevel ?? 'all';
@@ -238,7 +344,14 @@ function ViewerInner({
     () => (layout ? mergeViewDefaults(layout, viewName) : null),
     [layout, viewName],
   );
-  const geometry = useGeometry(viewModel, saved, detail, workerUrl);
+  const { geometry, final: layoutFinal } = useGeometry(
+    viewModel,
+    saved,
+    detail,
+    // Saved positions keep their own arrangement; packing only matters for auto-layout.
+    aspect,
+    workerUrl,
+  );
 
   // --- nodes (dragging moves them; never persisted) ------------------------------------------
   const baseNodes = useMemo(
@@ -274,12 +387,12 @@ function ViewerInner({
   // when a node mounts).
   const handles = useMemo(() => {
     const out = new Map<string, Set<string>>();
-    if (!viewModel) return out;
+    if (!viewModel || !geometry) return out;
     const tables = new Map(viewModel.tables.map((t) => [t.id, t]));
     const add = (tableId: string, column: string | undefined) => {
       const t = tables.get(tableId);
       if (!t) return;
-      const row = rowIndexOf(t, column, detail);
+      const row = rowIndexOf(t, column, nodeDetail(geometry, tableId, detail));
       let s = out.get(tableId);
       if (!s) out.set(tableId, (s = new Set()));
       for (const side of ['left', 'right'] as const)
@@ -290,7 +403,7 @@ function ViewerInner({
       add(r.to.tableId, r.to.columns[0]);
     }
     return out;
-  }, [viewModel, detail]);
+  }, [viewModel, geometry, detail]);
 
   const edges = useMemo(() => {
     const edges: RefFlowEdge[] = [];
@@ -354,6 +467,20 @@ function ViewerInner({
   const onClick = useCallback<NodeMouseHandler<FlowNode>>((_, n) => {
     if (n.type === 'rvTable') setSelected((s) => (s === n.id ? null : n.id));
   }, []);
+  // Keyboard: Tab reaches table nodes (React Flow wrappers carry data-id); Enter/Space opens the
+  // details card.
+  const onKeyDown = useCallback(
+    (e: ReactKeyboardEvent<HTMLDivElement>) => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const el = e.target as HTMLElement;
+      if (!el.classList?.contains('react-flow__node-rvTable')) return;
+      const id = el.getAttribute('data-id');
+      if (!id || !viewModel?.tables.some((t) => t.id === id)) return;
+      e.preventDefault();
+      setSelected((s) => (s === id ? null : id));
+    },
+    [viewModel],
+  );
   const selectedTable = selected ? viewModel?.tables.find((t) => t.id === selected) : undefined;
 
   const viewerState = useMemo<ViewerState>(
@@ -368,19 +495,90 @@ function ViewerInner({
   );
   const colors = useMemo(() => colorResolver(colorMode), [colorMode]);
 
-  // --- viewport ------------------------------------------------------------------------------
-  const fitted = useRef(false);
-  const fit = useCallback(
-    (duration = 200) => void rf.fitView({ padding: 0.12, maxZoom: 1.25, duration }),
-    [rf],
+  // --- minimap ---------------------------------------------------------------------------------
+  const tableCount = viewModel?.tables.length ?? 0;
+  const showMinimap =
+    minimap === true ||
+    (minimap === 'auto' && !!size && !narrow && tableCount >= MINIMAP_MIN_TABLES);
+  const padding = useMemo<Padding>(
+    () =>
+      showMinimap
+        ? { ...PAD, bottom: PAD.bottom + MINIMAP.height + MINIMAP.margin }
+        : narrow && title
+          ? { ...PAD, bottom: PAD.bottom + 36 } // the title chip sits at the bottom
+          : PAD,
+    [showMinimap, narrow, title],
   );
+
+  // --- viewport ------------------------------------------------------------------------------
+  const minZoom = narrow ? MIN_INITIAL_ZOOM_NARROW : MIN_INITIAL_ZOOM;
+  const viewerSize = useCallback(() => {
+    const el = rootRef.current;
+    return { width: el?.clientWidth ?? 0, height: el?.clientHeight ?? 0 };
+  }, []);
+  // Read through a ref so `fit` keeps its identity while tables are dragged.
+  const currentRef = useRef(current);
+  currentRef.current = current;
+  /** Shows the whole diagram (the Fit button), centred in the area the overlays leave free. */
+  const fit = useCallback(
+    (duration = 200, g: DiagramGeometry | null = currentRef.current) => {
+      const vp = g
+        ? fitViewport({ bounds: g.bounds, ...viewerSize(), padding, maxZoom: MAX_FIT_ZOOM })
+        : null;
+      if (vp) void rf.setViewport(vp, { duration });
+      else void rf.fitView({ maxZoom: MAX_FIT_ZOOM, duration });
+    },
+    [rf, padding, viewerSize],
+  );
+  /**
+   * Initial view: the fit, but never below the readable floor; a bigger diagram opens at that zoom
+   * on the window showing the most whole tables (see `initialViewport`). Fit shows everything.
+   */
+  const initialView = useCallback(
+    (g: DiagramGeometry, duration: number) => {
+      const size = viewerSize();
+      // The minimap only takes the bottom-right corner: a first view that cannot show everything
+      // uses the full height and keeps tables out from under it.
+      const minimapBox = {
+        x: size.width - MINIMAP.margin - MINIMAP.width,
+        y: size.height - MINIMAP.margin - MINIMAP.height,
+        width: MINIMAP.width,
+        height: MINIMAP.height,
+      };
+      const vp = initialViewport({
+        bounds: g.bounds,
+        nodes: Object.values(g.nodes),
+        groups: Object.values(g.groups),
+        ...size,
+        fitPadding: padding,
+        padding: showMinimap ? { ...padding, bottom: PAD.bottom } : padding,
+        ...(showMinimap ? { obstacles: [minimapBox] } : {}),
+        maxZoom: MAX_FIT_ZOOM,
+        minZoom,
+      });
+      if (vp) void rf.setViewport(vp, { duration });
+      else fit(duration, g);
+    },
+    [rf, fit, padding, minZoom, viewerSize, showMinimap],
+  );
+  const fitted = useRef(false);
+  /** The (view model, saved layout) a saved viewport was applied for. */
+  const savedViewportFor = useRef<{ model: DiagramModel | null; saved: unknown } | null>(null);
   useEffect(() => {
     if (!geometry) return;
     const first = !fitted.current;
     fitted.current = true;
+    const applySaved = first && !!saved?.viewport;
+    if (applySaved) savedViewportFor.current = { model: viewModel, saved };
+    // The ELK result replacing the first (sync) layout of the same view keeps a saved viewport;
+    // switching views or changing the source fits again.
+    const keepSaved =
+      !first &&
+      savedViewportFor.current?.model === viewModel &&
+      savedViewportFor.current?.saved === saved;
     const t = setTimeout(() => {
-      if (first && saved?.viewport) void rf.setViewport(saved.viewport);
-      else fit(first ? 0 : 250);
+      if (applySaved && saved?.viewport) void rf.setViewport(saved.viewport);
+      else if (!keepSaved) initialView(geometry, first ? 0 : 250);
     }, 0);
     return () => clearTimeout(t);
     // Refit when the layout changes (sync → ELK, view switch), not on every drag.
@@ -398,7 +596,8 @@ function ViewerInner({
   useEffect(() => {
     if (!overlay) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOverlay(false);
+      // An open menu or card handles Esc first (it calls preventDefault): one layer per press.
+      if (e.key === 'Escape' && !e.defaultPrevented) setOverlay(false);
     };
     document.addEventListener('keydown', onKey);
     const prev = document.body.style.overflow;
@@ -442,7 +641,7 @@ function ViewerInner({
     }),
     [detail, edges_, title],
   );
-  const fileName = (title ?? model?.project?.name ?? 'diagram').trim() || 'diagram';
+  const fileName = exportBaseName((title ?? model?.project?.name ?? 'diagram').trim()) || 'diagram';
   const onExport = useCallback(
     async (kind: ExportKind) => {
       if (!viewModel || !current) return;
@@ -476,16 +675,27 @@ function ViewerInner({
     }
   }, [viewModel, current, exportOpts]);
 
+  const multiFile = typeof source !== 'string';
+  // The editor link carries one DBML text; a multi-file project (`use` imports) cannot travel in
+  // it yet, so the button is hidden for those.
   const editorHref = useMemo(
-    () => (editorUrl ? editorLink(editorUrl, source) : null),
-    [editorUrl, key],
+    () => (editorUrl && !multiFile ? editorLink(editorUrl, source) : null),
+    [editorUrl, key, multiFile],
   );
 
-  const multiFile = typeof source !== 'string';
-  const rootStyle: CSSProperties = {
-    ...style,
-    height: fullscreen ? '100%' : typeof height === 'number' ? `${height}px` : height,
-  };
+  // On narrow screens a wide diagram would sit in a tall, mostly empty box: shrink the viewer to
+  // what the diagram needs at its initial zoom (never taller than asked).
+  let cssHeight: string = typeof height === 'number' ? `${height}px` : height;
+  if (narrow && typeof height === 'number' && size && current && !fullscreen) {
+    const b = current.bounds;
+    const aw = size.width - padding.left - padding.right;
+    if (b.width > 0 && b.height > 0) {
+      const z = Math.max(minZoom, Math.min(aw / b.width, MAX_FIT_ZOOM));
+      const need = Math.ceil(b.height * z + padding.top + padding.bottom);
+      cssHeight = `${Math.min(height, Math.max(280, need))}px`;
+    }
+  }
+  const rootStyle: CSSProperties = { ...style, height: fullscreen ? '100%' : cssHeight };
 
   return (
     <div
@@ -494,12 +704,15 @@ function ViewerInner({
         'rv-viewer',
         overlay ? 'rv-viewer--overlay' : '',
         nativeFs ? 'rv-viewer--fullscreen' : '',
+        narrow ? 'rv-viewer--narrow' : '',
         className ?? '',
       ]
         .filter(Boolean)
         .join(' ')}
       data-rv-color-mode={colorMode}
+      data-rv-layout={layoutFinal ? 'done' : 'pending'}
       style={rootStyle}
+      onKeyDown={onKeyDown}
     >
       <ColorContext.Provider value={colors}>
         <ViewerContext.Provider value={viewerState}>
@@ -515,7 +728,7 @@ function ViewerInner({
             onPaneClick={() => setSelected(null)}
             nodesDraggable={draggable}
             nodesConnectable={false}
-            nodesFocusable={false}
+            nodesFocusable
             edgesFocusable={false}
             edgesReconnectable={false}
             elementsSelectable={false}
@@ -526,9 +739,10 @@ function ViewerInner({
             minZoom={0.05}
             maxZoom={3}
             fitView
-            fitViewOptions={{ padding: 0.12, maxZoom: 1.25 }}
+            fitViewOptions={{ maxZoom: MAX_FIT_ZOOM }}
             forceColorMode={colorMode}
-            attributionPosition="bottom-left"
+            // MIT-licensed React Flow allows hiding it; it is credited in the README instead.
+            proOptions={{ hideAttribution: true }}
             aria-label={title ?? 'Entity-relationship diagram'}
           >
             <Background
@@ -538,11 +752,14 @@ function ViewerInner({
               color="var(--rv-grid-dot)"
               bgColor="var(--rv-canvas-bg)"
             />
-            {minimap ? (
+            {showMinimap ? (
               <MiniMap<FlowNode>
                 pannable
                 zoomable
                 className="rv-minimap"
+                style={{ width: MINIMAP.width, height: MINIMAP.height }}
+                offsetScale={2}
+                ariaLabel="Diagram overview"
                 nodeBorderRadius={3}
                 nodeColor={(n) =>
                   n.type === 'rvTable'
@@ -557,7 +774,11 @@ function ViewerInner({
         </ViewerContext.Provider>
       </ColorContext.Provider>
 
-      {title ? <div className="rv-title">{title}</div> : null}
+      {title ? (
+        <div className="rv-title" title={title}>
+          {title}
+        </div>
+      ) : null}
 
       {toolbar.length ? (
         <Toolbar
@@ -601,7 +822,13 @@ function ViewerInner({
         </div>
       ) : null}
 
-      {!model ? <div className="rv-empty">No diagram to show</div> : null}
+      {!model ? (
+        <div className="rv-empty">No diagram to show</div>
+      ) : emptyView ? (
+        <div className="rv-empty">
+          {viewName !== DEFAULT_VIEW ? `The view “${viewName}” has no tables.` : 'No tables yet.'}
+        </div>
+      ) : null}
     </div>
   );
 }

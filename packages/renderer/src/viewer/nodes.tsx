@@ -1,4 +1,4 @@
-import type { StickyNote, Table, TableGroup } from '@relvista/core';
+import type { DetailLevel, StickyNote, Table, TableGroup } from '@relvista/core';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, type ReactElement } from 'react';
 import { GroupSvg } from '../svg/GroupSvg.js';
@@ -7,7 +7,16 @@ import { rowCenterOffset } from '../svg/routing.js';
 import { TableSvg } from '../svg/TableSvg.js';
 import { parseHandleId, useViewerState } from './context.js';
 
-export type TableFlowNode = Node<{ table: Table; w: number; h: number }, 'rvTable'>;
+export type TableFlowNode = Node<
+  {
+    table: Table;
+    w: number;
+    h: number;
+    /** The node's own detail level (a saved collapsed table), else the viewer's. */
+    detail?: DetailLevel;
+  },
+  'rvTable'
+>;
 export type NoteFlowNode = Node<{ note: StickyNote; w: number; h: number }, 'rvNote'>;
 export type GroupFlowNode = Node<{ group: TableGroup; w: number; h: number }, 'rvGroup'>;
 export type FlowNode = TableFlowNode | NoteFlowNode | GroupFlowNode;
@@ -60,7 +69,7 @@ export const TableNode = memo(function TableNode({
         <TableSvg
           table={table}
           box={{ x: 0, y: 0, width: w, height: h }}
-          detailLevel={v.detailLevel}
+          detailLevel={data.detail ?? v.detailLevel}
           dimmed={v.lit ? !v.lit.tables.has(id) : false}
           highlighted={v.hoveredId === id}
           selected={v.selectedId === id}

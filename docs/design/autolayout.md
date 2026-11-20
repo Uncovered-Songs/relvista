@@ -23,6 +23,7 @@ that with no margin (the renderer adds padding).
 | `detailLevel` | `all`    | Passed to `measureTable`: `all`, `keys` (pk/fk/unique rows), `names` (header only).                                                                                                                                      |
 | `measure`     | estimate | `TextMeasure` for widths; default `estimateTextWidth` (deterministic, Node/SSR safe).                                                                                                                                    |
 | `saved`       | none     | A `ViewLayout`. A node entry with finite `x`/`y` keeps that position (pinned or not). `w`/`h` override the measured size, `collapsed: true` measures the table at `names`. Entries for ids not in the model are ignored. |
+| `aspectRatio` | 1.6      | Width / height of the viewport. Blocks (components, lone tables, notes) are packed to that shape (clamped to 0.25..4).                                                                                                   |
 | `workerUrl`   | none     | `layoutDiagram` only. URL of `elkjs/lib/elk-worker.min.js` served by the app; when set and `Worker` exists, ELK runs in a Web Worker.                                                                                    |
 
 ## Pipeline
@@ -75,6 +76,11 @@ One ELK graph per component, with short internal ids (`n<i>`, `g<i>`, `e<i>`, po
 - **Node placement.** `NETWORK_SIMPLEX` with `considerModelOrder: NONE`. On `14-large` this gave
   ~25% less area and ~11% shorter routes than Brandes–Köpf with model order
   (1330 vs 1780 × 10⁴ units², 149k vs 168k units of route), with similar results on the small examples.
+- **Thoroughness** 30 (default 7): on `14-large` the picture shrinks from 4604×4227 to 4618×3784
+  (aspect 1.09 → 1.22, ~10% less area) for ~50 ms more; every other example is identical. Other
+  knobs tried there (layering `LONGEST_PATH` / `MIN_WIDTH` / `STRETCH_WIDTH`, layer wrapping,
+  `DOWN`, post-compaction, depth-first cycle breaking) were all larger or longer;
+  `SEPARATE_CHILDREN` packs tighter but drops the routes of refs across groups.
 - Components without refs (a group of unrelated tables) skip ELK and use the grid placement; single
   nodes skip it too.
 
@@ -96,7 +102,20 @@ await layoutDiagram(model, { workerUrl: elkWorkerUrl });
 ```
 
 If `Worker` is missing, the worker cannot be created or a worker layout fails, the layout runs
-in-process instead. ELK instances are cached (one in-process, one per worker URL).
+in-process instead (the failed worker is terminated). ELK instances are cached (one in-process, one
+per worker URL); `disposeElkWorkers()` terminates the cached workers.
+
+The Docusaurus theme does this with a webpack rule: `elkjs/lib/elk-worker.min.js?relvista-worker`
+is emitted as an asset and its URL passed as `workerUrl`.
+
+Spacing options are set on every group (compound) node as well as on the root: ELK reads them from
+the node whose children it places, and without them tables inside a group were placed 15-40px
+apart. Inside groups the edge-to-table spacing is 12 (less than `groupPadding`), so refs leaving a
+group do not run along its drawn border. Self refs use west ports (the renderer loops them on the
+left by `METRICS.selfLoopReach`), away from the east ports other refs leave from.
+
+Routes come back parent → child; `finalize` reverses those of refs whose FK is on the `from` side,
+so `EdgeGeometry.points` always run `ref.from → ref.to`.
 
 ## dagre engine (`layout-dagre.ts`)
 

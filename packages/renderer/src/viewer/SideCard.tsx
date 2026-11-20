@@ -1,6 +1,6 @@
 import { tableTitle, type DiagramModel, type Table } from '@relvista/core';
 import { typeLabel } from '../svg/TableSvg.js';
-import type { ReactElement } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import { CloseIcon } from './icons.js';
 
 function flags(c: Table['columns'][number]): string[] {
@@ -24,9 +24,33 @@ export function SideCard({
   onClose(): void;
 }): ReactElement {
   const refs = model.refs.filter((r) => r.from.tableId === table.id || r.to.tableId === table.id);
+  const root = useRef<HTMLElement>(null);
+  const close = useRef(onClose);
+  close.current = onClose;
+  // Focus moves into the card when it opens (or shows another table) and returns on close;
+  // Esc closes it (capture phase + preventDefault, so a fullscreen overlay stays open).
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    root.current?.focus();
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      e.preventDefault();
+      close.current();
+    };
+    document.addEventListener('keydown', onKey, true);
+    return () => {
+      document.removeEventListener('keydown', onKey, true);
+      if (before && before !== document.body && before.isConnected) before.focus();
+    };
+  }, [table.id]);
   const group = table.groupId ? model.groups.find((g) => g.id === table.groupId) : undefined;
   return (
-    <aside className="rv-sidecard nodrag nopan nowheel" aria-label={`Table ${tableTitle(table)}`}>
+    <aside
+      ref={root}
+      tabIndex={-1}
+      className="rv-sidecard nodrag nopan nowheel"
+      aria-label={`Table ${tableTitle(table)}`}
+    >
       <header className="rv-sidecard-head">
         <div>
           <h3>{tableTitle(table)}</h3>

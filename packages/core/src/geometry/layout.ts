@@ -4,7 +4,7 @@
  */
 import type { NodeLayout } from '../layout/types.js';
 import type { DiagramModel } from '../model/types.js';
-import { estimateTextWidth } from './metrics.js';
+import { METRICS, estimateTextWidth } from './metrics.js';
 import type { Box, DiagramGeometry, GroupGeometry, LayoutOptions, NodeGeometry } from './types.js';
 import {
   components,
@@ -37,6 +37,8 @@ interface Prepared {
   /** Everything else, for the engine. */
   free: LayoutGraph;
   direction: Direction;
+  /** Target width / height of the whole picture. */
+  aspect: number;
 }
 
 function prepare(model: DiagramModel, options: LayoutOptions): Prepared {
@@ -56,6 +58,12 @@ function prepare(model: DiagramModel, options: LayoutOptions): Prepared {
     fixed,
     free: subgraph(graph, (n) => !fixed.has(n.id)),
     direction: options.direction === 'DOWN' ? 'DOWN' : 'RIGHT',
+    aspect:
+      typeof options.aspectRatio === 'number' &&
+      Number.isFinite(options.aspectRatio) &&
+      options.aspectRatio > 0
+        ? Math.min(4, Math.max(0.25, options.aspectRatio))
+        : TARGET_ASPECT,
   };
 }
 
@@ -78,7 +86,7 @@ function finalize(p: Prepared, placement: Placement): DiagramGeometry {
     }
     const f = unionBoxes(fixedBoxes);
     const b = placementBounds(free, placement);
-    const score = (w: number, h: number) => Math.max(w / TARGET_ASPECT, h);
+    const score = (w: number, h: number) => Math.max(w / p.aspect, h);
     const right = score(f.width + BLOCK_GAP + b.width, Math.max(f.height, b.height));
     const below = score(Math.max(f.width, b.width), f.height + BLOCK_GAP + b.height);
     if (right <= below)
@@ -106,6 +114,7 @@ function finalize(p: Prepared, placement: Placement): DiagramGeometry {
       y: pos.y,
       width: n.width,
       height: n.height,
+      ...(n.detailLevel ? { detailLevel: n.detailLevel } : {}),
     };
     nodes[n.id] = node;
     boxes.push(node);
@@ -118,9 +127,16 @@ function finalize(p: Prepared, placement: Placement): DiagramGeometry {
   }
   const edges: DiagramGeometry['edges'] = {};
   for (const e of graph.edges) {
+    if (e.source === e.target) {
+      // Self refs loop out of the table's left edge (drawn by the renderer).
+      const n = nodes[e.source]!;
+      boxes.push({ x: n.x - METRICS.selfLoopReach, y: n.y, width: 0, height: n.height });
+    }
     const pts = placement.edges.get(e.id);
     if (!pts || fixed.has(e.source) || fixed.has(e.target)) continue;
-    edges[e.id] = { id: e.id, points: pts.map((q) => ({ x: q.x, y: q.y })) };
+    // Engines route parent → child; the contract stores points in ref.from → ref.to order.
+    const ordered = e.reversed ? [...pts].reverse() : pts;
+    edges[e.id] = { id: e.id, points: ordered.map((q) => ({ x: q.x, y: q.y })) };
     for (const q of pts) boxes.push({ x: q.x, y: q.y, width: 0, height: 0 });
   }
   return { nodes, groups, edges, bounds: unionBoxes(boxes) };
@@ -132,7 +148,9 @@ function size(graph: LayoutGraph, id: string): { width: number; height: number }
 }
 
 function syncPlacement(p: Prepared, engine: LayoutOptions['engine']): Placement {
-  return engine === 'grid' ? gridEnginePlacement(p.free) : dagrePlacement(p.free, p.direction);
+  return engine === 'grid'
+    ? gridEnginePlacement(p.free, p.aspect)
+    : dagrePlacement(p.free, p.direction, p.aspect);
 }
 
 /**
@@ -165,5 +183,5 @@ export async function layoutDiagram(
   for (const comp of components(p.free)) {
     blocks.push(toBlock(comp, await elkComponent(comp, p.direction, workerUrl)));
   }
-  return finalize(p, packBlocks(orderBlocks(blocks)));
+  return finalize(p, packBlocks(orderBlocks(blocks), BLOCK_GAP, p.aspect));
 }

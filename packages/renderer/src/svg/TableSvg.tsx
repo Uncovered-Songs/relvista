@@ -1,10 +1,13 @@
 import {
   METRICS,
+  columnBadges,
+  columnTypeLabel,
   estimateTextWidth,
   tableTitle,
   visibleColumns,
   type Box,
   type Column,
+  type ColumnBadge,
   type DetailLevel,
   type Table,
   type TextMeasure,
@@ -30,10 +33,6 @@ export interface TableSvgProps {
   measure?: TextMeasure;
 }
 
-const BADGE_FONT = 9;
-const BADGE_H = 14;
-const BADGE_GAP = 4;
-
 function headerPath(w: number, h: number, r: number, roundBottom: boolean): string {
   const b = roundBottom ? r : 0;
   return (
@@ -43,14 +42,8 @@ function headerPath(w: number, h: number, r: number, roundBottom: boolean): stri
   );
 }
 
-/**
- * A column's type as drawn. `Column.type` is already written with its arguments
- * (`varchar(255)`), so they are only appended when missing.
- */
-export function typeLabel(c: Column): string {
-  if (!c.typeArgs || c.type.endsWith(')')) return c.type;
-  return `${c.type}(${c.typeArgs})`;
-}
+/** A column's type as drawn (core's `columnTypeLabel`, which layout measures). */
+export const typeLabel: (c: Column) => string = columnTypeLabel;
 
 /** Text of a column row's tooltip. */
 export function columnTooltip(c: Column): string {
@@ -63,24 +56,6 @@ export function columnTooltip(c: Column): string {
   if (c.default) parts.push(`default: ${String(c.default.value)}`);
   if (c.note) parts.push(`\n${c.note}`);
   return parts.join(' · ').replace(' · \n', '\n');
-}
-
-interface Badge {
-  label: string;
-  title: string;
-  kind: 'text' | 'dot';
-}
-
-function badgesOf(c: Column): Badge[] {
-  const out: Badge[] = [];
-  if (c.note) out.push({ label: '', title: 'has note', kind: 'dot' });
-  if (c.unique && !c.pk) out.push({ label: 'U', title: 'unique', kind: 'text' });
-  if (c.notNull && !c.pk) out.push({ label: 'NN', title: 'not null', kind: 'text' });
-  return out;
-}
-
-function badgeWidth(b: Badge): number {
-  return b.kind === 'dot' ? 6 : Math.ceil(b.label.length * BADGE_FONT * 0.68 + 7);
 }
 
 function KeyIcon({ cx, cy, color }: { cx: number; cy: number; color: string }): ReactElement {
@@ -148,7 +123,7 @@ export const TableSvg = memo(function TableSvg({
   const fs = METRICS.fontSize;
 
   const title = tableTitle(table);
-  const noteRoom = table.note ? 18 : 0;
+  const noteRoom = table.note ? METRICS.headerNoteIconWidth : 0;
   const titleText = truncate(title, 'tableName', w - px * 2 - noteRoom, measure);
   const schemaPrefix =
     table.schema !== 'public' && titleText.startsWith(`${table.schema}.`) ? table.schema + '.' : '';
@@ -206,6 +181,7 @@ export const TableSvg = memo(function TableSvg({
         // Name and type share the row; only when both do not fit is the longer one shortened,
         // the type keeping at least 45% of the room.
         const label = typeLabel(col);
+        const colBadges = columnBadges(col);
         const room = typeRight - nameX - METRICS.nameTypeGap;
         const fullName = measure(col.name, 'columnName');
         const fullType = measure(label, 'columnType');
@@ -216,15 +192,16 @@ export const TableSvg = memo(function TableSvg({
         const maxName = room - typeW;
         const nameText = truncate(col.name, 'columnName', maxName, measure);
         const nameEnd = nameX + measure(nameText, 'columnName');
-        // Badges sit right-aligned before the type, only where they fit.
-        const badges: Array<Badge & { x: number; w: number }> = [];
-        let bx = typeRight - typeW - 8;
-        for (const b of badgesOf(col)) {
-          const bw = badgeWidth(b);
-          if (bx - bw < nameEnd + 8) break;
-          bx -= bw;
-          badges.push({ ...b, x: bx, w: bw });
-          bx -= BADGE_GAP;
+        // Badges sit right-aligned before the type, only where they fit (measureTable reserves
+        // their room, so they are only dropped when a saved width is too narrow).
+        const B = METRICS.badge;
+        const badges: Array<ColumnBadge & { x: number }> = [];
+        let bx = typeRight - typeW - B.margin;
+        for (const b of colBadges) {
+          if (bx - b.width < nameEnd + B.margin) break;
+          bx -= b.width;
+          badges.push({ ...b, x: bx });
+          bx -= B.gap;
         }
         const lit = highlightColumns?.has(col.name) ?? false;
         return (
@@ -260,10 +237,10 @@ export const TableSvg = memo(function TableSvg({
               {nameText}
             </text>
             {badges.map((b) =>
-              b.kind === 'dot' ? (
+              b.kind === 'note' ? (
                 <circle
                   key={b.title}
-                  cx={b.x + b.w / 2}
+                  cx={b.x + b.width / 2}
                   cy={cy}
                   r={2.6}
                   style={{ fill: c('noteIndicator') }}
@@ -273,20 +250,20 @@ export const TableSvg = memo(function TableSvg({
                 <g key={b.title} data-rv-badge={b.title}>
                   <rect
                     x={b.x}
-                    y={cy - BADGE_H / 2}
-                    width={b.w}
-                    height={BADGE_H}
+                    y={cy - B.height / 2}
+                    width={b.width}
+                    height={B.height}
                     rx={3}
                     style={{ fill: c('badgeBg') }}
                   />
                   <text
-                    x={b.x + b.w / 2}
-                    y={baseline(cy, BADGE_FONT)}
+                    x={b.x + b.width / 2}
+                    y={baseline(cy, B.fontSize)}
                     textAnchor="middle"
                     style={{
                       fill: c('badgeText'),
                       fontFamily: METRICS.fontFamily,
-                      fontSize: BADGE_FONT,
+                      fontSize: B.fontSize,
                       fontWeight: 600,
                       letterSpacing: 0.3,
                     }}

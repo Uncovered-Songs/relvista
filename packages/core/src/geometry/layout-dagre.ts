@@ -123,12 +123,12 @@ function dagreComponent(g: LayoutGraph, direction: Direction): Placement {
   return { positions, edges: new Map() };
 }
 
-export function dagrePlacement(g: LayoutGraph, direction: Direction): Placement {
-  return layoutComponents(components(g), (c) => dagreComponent(c, direction));
+export function dagrePlacement(g: LayoutGraph, direction: Direction, aspect?: number): Placement {
+  return layoutComponents(components(g), (c) => dagreComponent(c, direction), undefined, aspect);
 }
 
 /** Grid engine: refs are ignored; groups become grids of their members; everything is packed. */
-export function gridEnginePlacement(g: LayoutGraph): Placement {
+export function gridEnginePlacement(g: LayoutGraph, aspect?: number): Placement {
   const loose: LayoutGraph = { ...g, edges: [] };
-  return layoutComponents(components(loose), (c) => gridPlacement(c, NODE_GAP));
+  return layoutComponents(components(loose), (c) => gridPlacement(c, NODE_GAP), undefined, aspect);
 }

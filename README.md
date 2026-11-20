@@ -9,7 +9,8 @@ dbdiagram.io uses.
   pan, fullscreen, print and export.
 - **Core libraries** — parser wrapper, diagram model, layout file and renderer, usable in any React app.
 
-> Status: phase 0 (foundations). Nothing is published yet.
+> Status: phase 1 (core, renderer, Docusaurus theme). Nothing is published on npm yet.
+> Docs and live gallery: <https://uncovered-songs.github.io/relvista/>
 
 ## Principles
 
@@ -43,7 +44,15 @@ pnpm test
 pnpm typecheck
 pnpm build
 pnpm validate:examples
+pnpm docs:start       # docs site with the theme, http://localhost:3000/relvista/
+pnpm test:e2e         # after `pnpm docs:build`; needs `pnpm --filter relvista-docs exec playwright install chromium`
 ```
+
+## Credits
+
+The interactive viewer is built on [React Flow](https://reactflow.dev) by xyflow (MIT). Auto-layout
+uses [ELK](https://eclipse.dev/elk/) (elkjs, EPL-2.0) and [dagre](https://github.com/dagrejs/dagre);
+DBML parsing uses the official [@dbml/parse](https://github.com/holistics/dbml).
 
 ## License
 

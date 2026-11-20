@@ -15,6 +15,20 @@ Fixed interfaces so core, renderer and the Docusaurus theme can be built in para
   `layoutDiagramSync(model, options?) : DiagramGeometry` (dagre or grid). Both honour `options.saved`
   positions, keep pinned nodes fixed, compute group boxes and bounds, and are deterministic.
 - `model` passed in is already view-filtered (`selectView`).
+- `EdgeGeometry.points` run from the `ref.from` table to the `ref.to` table, whatever direction the
+  engine used (ELK lays refs out parent → child). The renderer puts `ref.from`'s marker on
+  `points[0]`.
+- `NodeGeometry.detailLevel` is set when a table was measured at another level than the layout's
+  (a saved `collapsed: true` node is `names`); the renderer draws that table, and attaches its refs,
+  at that level.
+- `LayoutOptions.aspectRatio` (width / height of the viewport, default 1.6): disconnected parts and
+  sticky notes are packed to that shape.
+- `columnTypeLabel(column)` is the type text that is measured and drawn; `columnBadges(column)` /
+  `badgesWidth()` give the NN / U / note badges and the room `measureTable` reserves for them
+  (`METRICS.badge`), and `METRICS.headerNoteIconWidth` the header note icon. Column types are drawn
+  in `monoFontFamily`, and `estimateTextWidth(text, 'columnType')` estimates them as monospace.
+- Self refs loop out of the left edge of their table by `METRICS.selfLoopReach`; layout counts the
+  loop in `bounds`.
 
 ## @relvista/renderer
 
@@ -36,18 +50,35 @@ printDiagram(model, geometry, opts) : void                    // browser only, h
   toolbar?: Array<'zoom' | 'fit' | 'fullscreen' | 'export' | 'print' | 'view' | 'open-in-editor'>
   editorUrl?: string
   onDiagnostics?: (d: Diagnostic[]) => void
+  minimap?: boolean | 'auto'      // default 'auto': ≥ 8 tables and viewer ≥ 600px wide
+  workerUrl?: string | URL        // elk-worker.min.js; ELK then runs in a Web Worker
 />
 ```
 
 - Styles: `@relvista/renderer/styles.css`, all colours as `--rv-*` CSS variables, dark mode via
   `[data-rv-color-mode="dark"]` on the viewer root.
 - Fullscreen: `requestFullscreen()` on the viewer root; fallback fixed overlay closed with Esc.
-- Parse errors: last good diagram stays; an error banner lists diagnostics with line:column.
+- Parse errors: last good diagram stays; an error banner lists diagnostics with line:column, in
+  source order.
+- Initial view: fit, but never below zoom 0.85 (0.75 below 600px wide). A bigger diagram opens at
+  that zoom on the window showing the most whole tables: tables at the viewer edges are whole, not
+  sliced, nothing starts under the title / toolbar band, the minimap corner is avoided, and ties go
+  to the top-left. The Fit button shows everything.
+- Refs whose ends meet at the same port (table, row, side) are fanned out vertically within the row
+  (12px apart for two), so every end keeps its own cardinality marker. A saved `viewport` is kept when the ELK layout replaces
+  the first (dagre) one.
+- Below 600px wide the title moves to the bottom-left, zoom and print buttons are hidden (pinch
+  zoom), and the viewer shrinks to the height the diagram needs.
+- An unknown `view` logs a warning and shows all tables; an empty view says so. "Open in editor" is
+  hidden for multi-file sources (the `#dbml=` link carries one file).
 
 ## @relvista/docusaurus-theme
 
 - Wraps `@theme-init/CodeBlock`: `language-dbml` → `<DbmlDiagram value=… {...meta} />`;
   meta keys `title`, `height`, `view`, `layout` (JSON path in static/), `source` (show code tab).
 - `@theme/DbmlDiagram` props: `value` | `src`, `layout`, `view`, `height`, `title`. Renders
-  `DbmlViewer` inside `BrowserOnly` + error boundary, colour mode from `useColorMode`.
-- `configureWebpack`: `.dbml` → `asset/source`; `getPathsToWatch`; `validateThemeConfig` for `themeConfig.dbml`.
+  `DbmlViewer` inside `BrowserOnly` + error boundary, colour mode from `useColorMode`, and passes
+  the URL of ELK's worker script (emitted by the theme's webpack rule for
+  `elkjs/lib/elk-worker.min.js?relvista-worker`) so auto-layout runs off the main thread.
+- `configureWebpack`: `.dbml` → `asset/source`, `?relvista-worker` → `asset/resource`;
+  `getPathsToWatch`; `validateThemeConfig` for `themeConfig.dbml`.

@@ -6,3 +6,10 @@ coverage/
 .turbo/
 .docusaurus/
 build/
+# generated
+packages/docusaurus-theme/lib/
+apps/docs/docs/gallery/
+apps/docs/static/schemas/
+apps/docs/static/dbml/
+apps/docs/test-results/
+apps/docs/playwright-report/

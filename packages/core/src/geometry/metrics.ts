@@ -27,6 +27,23 @@ export const METRICS = {
   groupPadding: 24,
   groupHeaderHeight: 28,
   cornerRadius: 8,
+  /**
+   * How far a self ref's loop reaches out of the left edge of its table (room for the markers at
+   * both ends). Layout counts it in the diagram bounds; the renderer draws the loop with it.
+   */
+  selfLoopReach: 44,
+  /** Room for the note icon at the right end of a table header (tables with a note). */
+  headerNoteIconWidth: 18,
+  /** Column badges (NN / U pills and the note dot), drawn between a column's name and type. */
+  badge: {
+    fontSize: 9,
+    height: 14,
+    /** Gap between two badges. */
+    gap: 4,
+    /** Gap between the badges and the name before / the type after them. */
+    margin: 8,
+    dotWidth: 6,
+  },
 } as const;
 
 /** Average glyph width as a fraction of font size, per role (Inter-like proportional / monospace). */
@@ -37,18 +54,27 @@ const WIDTH_FACTOR: Record<TextRole, number> = {
   noteText: 0.55,
 };
 
+function isWide(ch: string): boolean {
+  return ch.codePointAt(0)! > 0x2e80; // CJK and other wide glyphs
+}
+
 /**
  * Deterministic text width estimate (no DOM), used in Node, SSR and as the default measure.
- * Browsers may pass a canvas-based TextMeasure for exact widths.
+ * Browsers may pass a canvas-based TextMeasure for exact widths. Column types are drawn in
+ * `monoFontFamily`, so they are estimated as fixed-width (0.6 em per glyph, wide glyphs twice).
  */
 export function estimateTextWidth(text: string, role: TextRole): number {
+  if (role === 'columnType') {
+    let cells = 0;
+    for (const ch of text) cells += isWide(ch) ? 2 : 1;
+    return Math.ceil(cells * WIDTH_FACTOR.columnType * METRICS.fontSize.columnType);
+  }
   let units = 0;
   for (const ch of text) {
     if (/[iljtfI.,:;'|!]/.test(ch)) units += 0.55;
     else if (/[mwMW@]/.test(ch)) units += 1.45;
     else if (/[A-Z]/.test(ch)) units += 1.2;
-    else if (ch.codePointAt(0)! > 0x2e80)
-      units += 1.8; // CJK and wide glyphs
+    else if (isWide(ch)) units += 1.8;
     else units += 1;
   }
   return Math.ceil(units * WIDTH_FACTOR[role] * METRICS.fontSize[role]);

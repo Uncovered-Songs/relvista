@@ -1,0 +1,34 @@
+import { Joi } from '@docusaurus/utils-validation';
+import type { ThemeConfigValidationContext } from '@docusaurus/types';
+import { DEFAULT_THEME_CONFIG, TOOLBAR_ITEMS, type ThemeConfig } from './defaults.js';
+
+export {
+  DEFAULT_THEME_CONFIG,
+  TOOLBAR_ITEMS,
+  type DbmlThemeConfig,
+  type ThemeConfig,
+} from './defaults.js';
+
+export const ThemeConfigSchema = Joi.object<ThemeConfig>({
+  dbml: Joi.object({
+    height: Joi.alternatives()
+      .try(Joi.number().positive(), Joi.string().min(1))
+      .default(DEFAULT_THEME_CONFIG.dbml.height),
+    toolbar: Joi.array()
+      .items(Joi.string().valid(...TOOLBAR_ITEMS))
+      .unique()
+      .default(DEFAULT_THEME_CONFIG.dbml.toolbar),
+    editorUrl: Joi.string().uri({ allowRelative: true }),
+    detailLevel: Joi.string()
+      .valid('all', 'keys', 'names')
+      .default(DEFAULT_THEME_CONFIG.dbml.detailLevel),
+  }).default(DEFAULT_THEME_CONFIG.dbml),
+});
+
+/** Validates `themeConfig.dbml` and fills in defaults. Called by Docusaurus at startup. */
+export function validateThemeConfig({
+  validate,
+  themeConfig,
+}: ThemeConfigValidationContext<ThemeConfig>): ThemeConfig {
+  return validate(ThemeConfigSchema, themeConfig);
+}

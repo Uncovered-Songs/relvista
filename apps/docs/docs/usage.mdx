@@ -1,0 +1,213 @@
+---
+sidebar_position: 2
+title: Usage
+description: Code fences, the DbmlDiagram component, .dbml files, layout files, views, fullscreen, export and print.
+---
+
+import DbmlDiagram from '@theme/DbmlDiagram';
+import minimal from '@site/../../examples/01-minimal.dbml';
+
+There are two ways to put a diagram on a page: a ` ```dbml ` **code fence** for schemas written in the
+page, and the **`<DbmlDiagram>` component** for `.dbml` files, multi-file projects and anything
+computed.
+
+## Code fences
+
+Every fenced block with the language `dbml` becomes a diagram. Options go in the fence's meta string:
+
+````md
+```dbml title="Billing" height=420 source
+Table invoices {
+  id integer [pk]
+  customer_id integer [ref: > customers.id]
+  total decimal(10,2)
+}
+
+Table customers {
+  id integer [pk]
+  name varchar
+}
+```
+````
+
+```dbml title="Billing" height=420 source
+Table invoices {
+  id integer [pk]
+  customer_id integer [ref: > customers.id]
+  total decimal(10,2)
+}
+
+Table customers {
+  id integer [pk]
+  name varchar
+}
+```
+
+| Meta     | Example                           | Meaning                                                              |
+| -------- | --------------------------------- | -------------------------------------------------------------------- |
+| `title`  | `title="Billing"`                 | Caption in the diagram's top-left corner; also the export file name. |
+| `height` | `height=500`, `height=60vh`       | Height of this diagram. Overrides `themeConfig.dbml.height`.         |
+| `view`   | `view="billing"`                  | Start in a `DiagramView` declared in the DBML.                       |
+| `layout` | `layout="/layouts/x.layout.json"` | Saved table positions, from a file in `static/` (see below).         |
+| `source` | `source`                          | Adds **Diagram** / **Source** tabs so readers can see the DBML.      |
+| `detail` | `detail=keys`                     | `all` columns, `keys` only, or table `names` only.                   |
+| `static` | `static`                          | Show the fence as highlighted DBML code instead of a diagram.        |
+
+Values can be double-quoted, single-quoted or bare; a bare key is `true`.
+
+To show DBML _code_ without a diagram, add `static`:
+
+````md
+```dbml static
+Table users {
+  id integer [pk]
+}
+```
+````
+
+```dbml static
+Table users {
+  id integer [pk]
+  email varchar [unique, note: 'login']
+}
+```
+
+## The `DbmlDiagram` component
+
+In MDX, import the component and pass the DBML as `value`:
+
+```mdx
+import DbmlDiagram from '@theme/DbmlDiagram';
+
+<DbmlDiagram value={`Table users { id integer [pk] }`} height={240} />
+```
+
+| Prop          | Type                             | Meaning                                                                                       |
+| ------------- | -------------------------------- | --------------------------------------------------------------------------------------------- |
+| `value`       | `string` or `{ files, entry }`   | DBML source, or a multi-file project.                                                         |
+| `src`         | `string`                         | URL of a `.dbml` file served by the site (`/schemas/shop.dbml`); used when `value` is absent. |
+| `layout`      | layout object or `string`        | A parsed layout file, or the URL of one served by the site.                                   |
+| `view`        | `string`                         | `DiagramView` to start in.                                                                    |
+| `height`      | `number` or `string`             | Pixels or a CSS length.                                                                       |
+| `title`       | `string`                         | Caption and export file name.                                                                 |
+| `source`      | `boolean`                        | Diagram / Source tabs.                                                                        |
+| `detailLevel` | `'all'` \| `'keys'` \| `'names'` | Overrides the site default and the layout file.                                               |
+| `toolbar`     | array of toolbar items           | Overrides `themeConfig.dbml.toolbar`.                                                         |
+| `editorUrl`   | `string`                         | Overrides `themeConfig.dbml.editorUrl`.                                                       |
+
+## `.dbml` files
+
+The theme teaches webpack to import `.dbml` files as text, so a schema can live next to your docs (or
+anywhere in the repository) and stay a normal file that dbdiagram.io and other tools can open:
+
+```mdx
+import DbmlDiagram from '@theme/DbmlDiagram';
+import schema from './schema.dbml';
+
+<DbmlDiagram value={schema} title="schema.dbml" />
+```
+
+Or put the file in `static/` and load it by URL at runtime; the site's `baseUrl` is added for you:
+
+```mdx
+<DbmlDiagram src="/dbml/01-minimal.dbml" height={320} />
+```
+
+<DbmlDiagram
+  src="/dbml/01-minimal.dbml"
+  height={320}
+  title="01-minimal.dbml (loaded from static/)"
+/>
+
+### Multi-file projects
+
+DBML projects can split a schema over several files with `use` and `reuse`. Import each file and
+pass them as `{ files, entry }`; keys are paths relative to each other, exactly as the `use`
+statements spell them:
+
+```mdx
+import DbmlDiagram from '@theme/DbmlDiagram';
+import main from './db/main.dbml';
+import billing from './db/billing.dbml';
+import users from './db/common/users.dbml';
+
+<DbmlDiagram
+  value={{
+    entry: 'main.dbml',
+    files: { 'main.dbml': main, 'billing.dbml': billing, 'common/users.dbml': users },
+  }}
+/>
+```
+
+The [modules example](./gallery/12-modules.mdx) in the gallery is built this way.
+
+## Layout files
+
+Auto-layout places every table. To keep your own arrangement, store it in a
+[layout file](./layout-file.md) next to the schema, put it in `static/`, and point the diagram at
+it. Tables listed in the file keep their positions; any others are placed around them.
+
+````md
+```dbml layout="/layouts/01-minimal.dbml.layout.json"
+Table users { ... }
+Table posts { ... }
+```
+````
+
+<DbmlDiagram
+  value={minimal}
+  layout="/layouts/01-minimal.dbml.layout.json"
+  title="Saved layout: posts left, users right"
+  height={340}
+/>
+
+With the component, `layout` also accepts the parsed object, so a JSON import works too:
+
+```mdx
+import layout from './schema.dbml.layout.json';
+
+<DbmlDiagram value={schema} layout={layout} />
+```
+
+An invalid layout file shows an error explaining what is wrong instead of a diagram.
+
+## Views
+
+A `DiagramView` in the DBML names a subset of tables. The toolbar's view menu switches between them,
+and `view` picks the starting one:
+
+````md
+```dbml view="sales_view"
+...
+```
+````
+
+See the [diagram views example](./gallery/08-diagram-views.mdx).
+
+## Toolbar: fullscreen, export and print
+
+Every diagram has a toolbar in its top-right corner:
+
+- **View menu** — shown when the DBML declares `DiagramView`s.
+- **Zoom in / out** and **fit** — or use the scroll wheel, pinch and drag on the canvas.
+- **Fullscreen** — the diagram fills the screen; <kbd>Esc</kbd> leaves.
+- **Export** — download the diagram as **SVG** (vector, with embedded styles) or **PNG** (2× resolution).
+- **Print** — prints just the diagram, scaled to fit a landscape page.
+- **Open in editor** — when `editorUrl` is configured.
+
+Exports and prints use the current colour mode and detail level, and include tables you dragged
+where you left them.
+
+## Colour mode
+
+Diagrams follow the site's light/dark switch automatically. Colours are CSS variables named
+`--rv-*`, so you can restyle them in your `custom.css`:
+
+```css title="src/css/custom.css"
+[data-theme='dark'] .rv-viewer {
+  --rv-canvas-bg: #0b0d12;
+  --rv-header-bg: #334155;
+}
+```
+
+Tables with a `headercolor` setting in the DBML keep their colour in both modes.

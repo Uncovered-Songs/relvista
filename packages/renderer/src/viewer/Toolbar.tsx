@@ -1,5 +1,13 @@
 import { DEFAULT_VIEW } from '@relvista/core';
-import { useEffect, useRef, useState, type ReactElement, type ReactNode } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+  type KeyboardEvent as ReactKeyboardEvent,
+  type ReactElement,
+  type ReactNode,
+  type Ref,
+} from 'react';
 import {
   ChevronIcon,
   CollapseIcon,
@@ -49,21 +57,31 @@ function Button({
   children,
   pressed,
   expanded,
+  popup,
+  buttonRef,
+  item,
 }: {
   title: string;
   onClick(): void;
   children: ReactNode;
   pressed?: boolean;
   expanded?: boolean;
+  popup?: 'menu';
+  buttonRef?: Ref<HTMLButtonElement>;
+  /** Toolbar item this button belongs to (CSS hides some in narrow viewers). */
+  item?: ToolbarItem;
 }): ReactElement {
   return (
     <button
+      ref={buttonRef}
+      data-rv-item={item}
       type="button"
       className="rv-tb-button"
       title={title}
       aria-label={title}
       aria-pressed={pressed}
       aria-expanded={expanded}
+      aria-haspopup={popup}
       onClick={onClick}
     >
       {children}
@@ -75,21 +93,50 @@ export function Toolbar(p: ToolbarProps): ReactElement {
   const has = (i: ToolbarItem) => p.items.includes(i);
   const [menu, setMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const exportButton = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (!menu) return;
-    const close = (e: Event) => {
-      if (e instanceof KeyboardEvent && e.key !== 'Escape') return;
-      if (e instanceof MouseEvent && menuRef.current?.contains(e.target as globalThis.Node)) return;
+    // Focus the first item when the menu opens (keyboard users land in it).
+    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    const onMouse = (e: MouseEvent) => {
+      if (menuRef.current?.contains(e.target as globalThis.Node)) return;
       setMenu(false);
     };
-    document.addEventListener('mousedown', close);
-    document.addEventListener('keydown', close);
+    // Capture phase, so the menu sees Esc before the fullscreen overlay does; preventDefault
+    // tells the overlay this press is taken (one layer closes per press).
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      e.preventDefault();
+      setMenu(false);
+      exportButton.current?.focus();
+    };
+    document.addEventListener('mousedown', onMouse);
+    document.addEventListener('keydown', onKey, true);
     return () => {
-      document.removeEventListener('mousedown', close);
-      document.removeEventListener('keydown', close);
+      document.removeEventListener('mousedown', onMouse);
+      document.removeEventListener('keydown', onKey, true);
     };
   }, [menu]);
+
+  /** Arrow keys / Home / End move between menu items. */
+  const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    const items = Array.from(
+      menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
+    );
+    if (!items.length) return;
+    const i = items.indexOf(document.activeElement as HTMLElement);
+    let next = -1;
+    if (e.key === 'ArrowDown') next = (i + 1) % items.length;
+    else if (e.key === 'ArrowUp') next = (i - 1 + items.length) % items.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = items.length - 1;
+    else if (e.key === 'Tab') setMenu(false);
+    if (next >= 0) {
+      e.preventDefault();
+      items[next]!.focus();
+    }
+  };
 
   const groups: ReactNode[] = [];
   if (has('view') && p.views.length > 0) {
@@ -115,10 +162,10 @@ export function Toolbar(p: ToolbarProps): ReactElement {
   const nav: ReactNode[] = [];
   if (has('zoom')) {
     nav.push(
-      <Button key="zi" title="Zoom in" onClick={p.onZoomIn}>
+      <Button key="zi" title="Zoom in" item="zoom" onClick={p.onZoomIn}>
         <ZoomInIcon />
       </Button>,
-      <Button key="zo" title="Zoom out" onClick={p.onZoomOut}>
+      <Button key="zo" title="Zoom out" item="zoom" onClick={p.onZoomOut}>
         <ZoomOutIcon />
       </Button>,
     );
@@ -153,14 +200,21 @@ export function Toolbar(p: ToolbarProps): ReactElement {
   if (has('export')) {
     out.push(
       <div key="export" className="rv-tb-menu-wrap" ref={menuRef}>
-        <Button title="Export" expanded={menu} onClick={() => setMenu((m) => !m)}>
+        <Button
+          title="Export"
+          expanded={menu}
+          popup="menu"
+          buttonRef={exportButton}
+          onClick={() => setMenu((m) => !m)}
+        >
           <DownloadIcon />
         </Button>
         {menu ? (
-          <div className="rv-tb-menu" role="menu">
+          <div className="rv-tb-menu" role="menu" aria-label="Export" onKeyDown={onMenuKey}>
             <button
               type="button"
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
                 setMenu(false);
                 p.onExport('svg');
@@ -171,6 +225,7 @@ export function Toolbar(p: ToolbarProps): ReactElement {
             <button
               type="button"
               role="menuitem"
+              tabIndex={-1}
               onClick={() => {
                 setMenu(false);
                 p.onExport('png');
@@ -185,7 +240,7 @@ export function Toolbar(p: ToolbarProps): ReactElement {
   }
   if (has('print')) {
     out.push(
-      <Button key="print" title="Print" onClick={p.onPrint}>
+      <Button key="print" title="Print" item="print" onClick={p.onPrint}>
         <PrintIcon />
       </Button>,
     );

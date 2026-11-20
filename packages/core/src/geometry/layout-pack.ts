@@ -31,7 +31,36 @@ export function toBlock(graph: LayoutGraph, placement: Placement): Block {
   return { graph, placement, width: b.width, height: b.height };
 }
 
-/** Rows-of-blocks packing ("shelf" packing). Blocks are placed in the given order. */
+/** Row breaks of a shelf packing: the x/y of each block for a given maximum row width. */
+function shelf(
+  blocks: Block[],
+  gap: number,
+  rowWidth: number,
+): { at: Array<{ x: number; y: number }>; width: number; height: number } {
+  const at: Array<{ x: number; y: number }> = [];
+  let x = 0;
+  let y = 0;
+  let rowHeight = 0;
+  let width = 0;
+  for (const b of blocks) {
+    if (x > 0 && x + b.width > rowWidth) {
+      y += rowHeight + gap;
+      x = 0;
+      rowHeight = 0;
+    }
+    at.push({ x, y });
+    width = Math.max(width, x + b.width);
+    x += b.width + gap;
+    rowHeight = Math.max(rowHeight, b.height);
+  }
+  return { at, width, height: y + rowHeight };
+}
+
+/**
+ * Rows-of-blocks packing ("shelf" packing). Blocks are placed in the given order; of all the row
+ * widths that give a different packing, the one whose bounding box is closest to `aspect`
+ * (width / height) wins, i.e. the one that can be shown largest in a viewport of that shape.
+ */
 export function packBlocks(
   blocks: Block[],
   gap: number = BLOCK_GAP,
@@ -39,28 +68,34 @@ export function packBlocks(
 ): Placement {
   const out: Placement = { positions: new Map(), edges: new Map() };
   if (!blocks.length) return out;
-  let area = 0;
+  const ratio = Number.isFinite(aspect) && aspect > 0 ? aspect : TARGET_ASPECT;
   let widest = 0;
+  for (const b of blocks) widest = Math.max(widest, b.width);
+  // Candidate row widths: every distinct "first k blocks fit on a row" width.
+  const candidates = new Set<number>([widest]);
+  let run = 0;
   for (const b of blocks) {
-    area += (b.width + gap) * (b.height + gap);
-    widest = Math.max(widest, b.width);
+    run += b.width;
+    if (run >= widest) candidates.add(run);
+    run += gap;
   }
-  const rowWidth = Math.max(widest, Math.sqrt(area * aspect));
-  let x = 0;
-  let y = 0;
-  let rowHeight = 0;
-  for (const b of blocks) {
-    if (x > 0 && x + b.width > rowWidth) {
-      y += rowHeight + gap;
-      x = 0;
-      rowHeight = 0;
+  let best: ReturnType<typeof shelf> | null = null;
+  let bestScore = Infinity;
+  for (const w of [...candidates].sort((a, b) => a - b)) {
+    const s = shelf(blocks, gap, w);
+    // Size of the viewport (of the target shape) needed to show the packing at zoom 1.
+    const score = Math.max(s.width / ratio, s.height);
+    if (score < bestScore - 0.5) {
+      best = s;
+      bestScore = score;
     }
-    translatePlacement(b.placement, Math.round(x), Math.round(y));
-    for (const [id, p] of b.placement.positions) out.positions.set(id, p);
-    for (const [id, pts] of b.placement.edges) out.edges.set(id, pts);
-    x += b.width + gap;
-    rowHeight = Math.max(rowHeight, b.height);
   }
+  blocks.forEach((b, i) => {
+    const p = best!.at[i]!;
+    translatePlacement(b.placement, Math.round(p.x), Math.round(p.y));
+    for (const [id, q] of b.placement.positions) out.positions.set(id, q);
+    for (const [id, pts] of b.placement.edges) out.edges.set(id, pts);
+  });
   return out;
 }
 
@@ -91,8 +126,9 @@ export function layoutComponents(
   comps: LayoutGraph[],
   layoutOne: (g: LayoutGraph) => Placement,
   gap: number = BLOCK_GAP,
+  aspect: number = TARGET_ASPECT,
 ): Placement {
-  return packBlocks(orderBlocks(comps.map((c) => toBlock(c, layoutOne(c)))), gap);
+  return packBlocks(orderBlocks(comps.map((c) => toBlock(c, layoutOne(c)))), gap, aspect);
 }
 
 /** Places a single node at the origin (components of one node need no engine). */
