@@ -1,0 +1,61 @@
+---
+title: Modular shop
+owner: platform-team
+---
+// Entry point of a multi-file project.
+//  - `use *` from a barrel that re-exports with `reuse`
+//  - selective `use { ... }` with element kinds and `as` aliases
+//  - importing a whole schema and a table group
+//  - Metadata blocks adding properties to imported elements
+
+use * from './common/index'
+
+use {
+  table users as billing_users
+  table invoices
+} from './billing'
+
+use {
+  schema auth
+  tablegroup auth_core
+  note auth_readme
+} from './auth.dbml'
+
+Project modular_shop {
+  database_type: 'PostgreSQL'
+  Note: 'Example of the DBML module system (use / reuse).'
+}
+
+Table user_links {
+  user_id integer [pk, ref: - users.id]
+  billing_user_id integer [unique, ref: - billing_users.id]
+  auth_user_id integer [unique, ref: - auth.users.id]
+}
+
+Table order_invoices {
+  order_id integer [ref: > orders.id]
+  invoice_id integer [ref: > invoices.id]
+
+  indexes {
+    (order_id, invoice_id) [pk]
+  }
+}
+
+Metadata Table users {
+  owner: 'growth-team'
+  pii: true
+}
+
+Metadata Ref orders_user {
+  critical: true
+}
+
+DiagramView customer_360 {
+  Tables {
+    users
+    user_links
+    billing_users
+    orders
+  }
+  TableGroups { auth_core }
+}

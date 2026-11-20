@@ -1,0 +1,103 @@
+// Several named DiagramView blocks over one schema: everything, nothing, a hand-picked
+// table list, and views mixing tables, sticky notes, table groups and schemas.
+
+Table users {
+  id integer [pk]
+  email varchar [not null, unique]
+}
+
+Table orders {
+  id integer [pk]
+  user_id integer [ref: > users.id]
+  created_at timestamp
+}
+
+Table products {
+  id integer [pk]
+  name varchar
+}
+
+Table order_items {
+  order_id integer [ref: > orders.id]
+  product_id integer [ref: > products.id]
+  quantity integer
+
+  indexes {
+    (order_id, product_id) [pk]
+  }
+}
+
+Table core.audit_events {
+  id bigint [pk]
+  user_id integer [ref: > users.id]
+  action varchar
+}
+
+Table core.feature_flags {
+  key varchar [pk]
+  enabled boolean
+}
+
+Table analytics.daily_sales {
+  day date [pk]
+  revenue numeric
+}
+
+TableGroup group_1 [color: #3498DB] {
+  users
+  orders
+}
+
+TableGroup group_2 [color: #79AD51] {
+  products
+  order_items
+}
+
+Note reminder_note {
+  'Sales tables are owned by the commerce team.'
+}
+
+Note core_note [color: #F4D03F] {
+  'core.* is internal; do not expose in public docs.'
+}
+
+// Show all items in all categories
+DiagramView full_view {
+  Tables { * }
+  Notes { * }
+  TableGroups { * }
+  Schemas { * }
+}
+
+// Show nothing (empty view)
+DiagramView empty_view {
+}
+
+// Select specific tables
+DiagramView sales_view {
+  Tables {
+    users
+    orders
+    products
+    order_items
+  }
+}
+
+// Mixed filtering with all items in some categories
+DiagramView mixed_view {
+  Tables { * }
+  Notes { reminder_note }
+  TableGroups { group_2 }
+  Schemas { core }
+}
+
+// Schema-only view plus one sticky note
+DiagramView internal_view {
+  Notes {
+    core_note
+  }
+  Schemas {
+    core
+    analytics
+  }
+}

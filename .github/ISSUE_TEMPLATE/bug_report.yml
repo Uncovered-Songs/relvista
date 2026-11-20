@@ -1,0 +1,55 @@
+name: Bug report
+description: Something in relvista renders, parses or saves wrongly.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A minimal DBML snippet that reproduces the problem helps most.
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Editor website
+        - Docusaurus theme
+        - '@relvista/core'
+        - '@relvista/renderer'
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: dbml
+    attributes:
+      label: DBML snippet
+      description: The smallest DBML that reproduces the problem. Does it work on dbdiagram.io?
+      render: dbml
+      placeholder: |
+        Table users {
+          id integer [pk]
+        }
+    validations:
+      required: true
+  - type: textarea
+    id: layout
+    attributes:
+      label: Layout file (optional)
+      description: Relevant part of `schema.dbml.layout.json`, if any.
+      render: json
+  - type: input
+    id: version
+    attributes:
+      label: relvista version
+      placeholder: e.g. @relvista/docusaurus-theme 0.1.0, or editor build date
+  - type: input
+    id: environment
+    attributes:
+      label: Environment
+      placeholder: e.g. Chrome 140 on macOS, Node 24, Docusaurus 3.9

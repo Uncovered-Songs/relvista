@@ -1,0 +1,71 @@
+// Column settings, default value kinds, every index form (single, composite,
+// expression, mixed, sort order, type, name, unique, pk, note) and check constraints
+// (column-level and table-level, named).
+
+Table buildings {
+  id integer [pk, unique, default: 123, note: 'Number']
+  address varchar(255) [unique, not null, note: 'to include unit number']
+  floors integer [not null, default: 1, check: `floors > 0`, check: `floors < 200`]
+  height_m "double precision" [check: `height_m > 0`]
+  owner_id "bigint unsigned" [note: 'Unsupported types are written as quoted type names']
+}
+
+Table users {
+  id integer [primary key]
+  username varchar(255) [not null, unique]
+  full_name varchar(255) [not null]
+  gender varchar(1) [not null]
+  source varchar(255) [default: 'direct']
+  is_active boolean [default: true]
+  manager_id integer [default: null]
+  wealth integer
+  debt integer
+  rating integer [default: 10]
+  score numeric [default: 123.456]
+  created_at timestamp [default: `now()`]
+  trial_ends_at timestamp [default: `now() + interval '14 days'`]
+
+  checks {
+    `debt + wealth >= 0` [name: 'chk_positive_money']
+    `rating between 0 and 10`
+  }
+}
+
+Table bookings {
+  id integer
+  country varchar
+  booking_date date
+  created_at timestamp
+  guest_name varchar
+
+  indexes {
+    (id, country) [pk] // composite primary key
+    created_at [name: 'created_at_index', note: 'Date']
+    booking_date
+    (country, booking_date) [unique]
+    booking_date [type: hash]
+    (country, created_at) [type: btree, name: 'bookings_country_created']
+    (`id*2`)
+    (`id*3`, `getdate()`)
+    (`id*3`, id)
+    (`lower(guest_name)`) [name: 'bookings_guest_ci']
+  }
+}
+
+Table events {
+  id bigint [pk, increment]
+  tenant_id integer [not null]
+  kind varchar(40) [not null]
+  occurred_at timestamp [not null]
+  payload jsonb
+
+  indexes {
+    (occurred_at [desc])
+    (tenant_id [asc], occurred_at [desc]) [name: 'events_tenant_recent']
+    (`lower(kind)` [desc])
+  }
+
+  checks {
+    `occurred_at > '2000-01-01'` [name: 'chk_events_sane_time']
+  }
+}

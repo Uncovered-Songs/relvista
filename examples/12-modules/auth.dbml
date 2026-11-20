@@ -1,0 +1,27 @@
+// The auth schema, imported selectively and as a whole schema by main.dbml.
+
+Table auth.users {
+  id integer [pk]
+  email varchar
+  password_hash varchar [not null]
+}
+
+Table auth.roles {
+  id integer [pk]
+  name varchar [not null, unique]
+}
+
+Table auth.sessions {
+  id integer [pk]
+  user_id integer [not null, ref: > auth.users.id]
+  expires_at timestamp [not null]
+}
+
+TableGroup auth_core [color: #8e44ad] {
+  auth.users
+  auth.roles
+}
+
+Note auth_readme {
+  'auth.* is managed by the identity service; read-only for everyone else.'
+}

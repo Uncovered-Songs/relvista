@@ -1,0 +1,15 @@
+// Orders depend on users: a sibling import inside the common/ folder.
+// @dbml/parse 12.1.0 requires a table's partials to be imported alongside it.
+use {
+  table users
+  tablepartial timestamps
+} from './users'
+
+Table orders {
+  id integer [pk, increment]
+  user_id integer [not null]
+  total "decimal(10,2)" [not null]
+  placed_at timestamp [not null, default: `now()`]
+}
+
+Ref orders_user: orders.user_id > users.id [delete: restrict]

@@ -1,0 +1,14 @@
+// Defines its own `users` table, which would clash with common/users.dbml;
+// main.dbml imports it under an alias.
+
+Table users {
+  id integer [pk]
+  stripe_customer_id varchar(64) [unique]
+  balance "decimal(12,2)" [not null, default: 0]
+}
+
+Table invoices {
+  id integer [pk, increment]
+  billing_user_id integer [not null, ref: > users.id]
+  amount "decimal(12,2)" [not null]
+}

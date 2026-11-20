@@ -1,0 +1,145 @@
+// A small storefront that exercises every relationship form DBML offers:
+// inline refs, short form, long form, all four cardinalities (<, >, -, <>),
+// optional sides (?), composite foreign keys, named refs and referential actions.
+
+Project storefront {
+  database_type: 'PostgreSQL'
+  Note: 'Storefront schema used to demonstrate relationships.'
+}
+
+Table countries {
+  code char(2) [pk]
+  name varchar(100) [not null]
+  continent_name varchar(50)
+}
+
+Table merchants {
+  id integer [increment]
+  country_code char(2) [ref: > countries.code]
+  merchant_name varchar(120) [not null]
+  admin_id integer
+  created_at timestamp [default: `now()`]
+
+  indexes {
+    (id, country_code) [pk]
+  }
+}
+
+// Composite foreign key target: merchants.(id, country_code)
+Table merchant_periods {
+  id integer [pk, increment]
+  merchant_id integer [not null]
+  country_code char(2) [not null]
+  start_date date [not null]
+  end_date date
+}
+
+Table users {
+  id integer [pk, increment]
+  full_name varchar(200)
+  email varchar(255) [not null, unique]
+  country_code char(2)
+  created_at timestamp [default: `now()`]
+}
+
+// One-to-one: every user has at most one profile; user_profiles.user_id is the FK.
+Table user_profiles {
+  user_id integer [pk, ref: - users.id]
+  avatar_url varchar(500)
+  bio text
+}
+
+Table categories {
+  id integer [pk, increment]
+  parent_id integer [ref: >? categories.id, note: 'Self reference; null for root categories']
+  name varchar(100) [not null]
+}
+
+Table products {
+  id integer [pk, increment]
+  name varchar(200) [not null]
+  merchant_id integer [not null]
+  merchant_country char(2) [not null]
+  category_id integer
+  price "decimal(10,2)" [not null, default: 0]
+  status varchar(20) [default: 'draft']
+  created_at timestamp [default: `now()`]
+}
+
+// Many-to-many expressed directly with <>.
+Table tags {
+  id integer [pk, increment]
+  label varchar(50) [not null, unique]
+}
+
+Table orders {
+  id integer [pk, increment]
+  user_id integer [not null]
+  status varchar(20) [not null, default: 'pending']
+  coupon_id integer
+  created_at timestamp [default: `now()`]
+}
+
+// Many-to-many expressed as a junction table with two many-to-one refs.
+Table order_items {
+  order_id integer
+  product_id integer
+  quantity integer [not null, default: 1]
+  unit_price "decimal(10,2)" [not null]
+
+  indexes {
+    (order_id, product_id) [pk]
+  }
+}
+
+Table coupons {
+  id integer [pk, increment]
+  code varchar(32) [not null, unique]
+  percent_off integer
+}
+
+Table payments {
+  id integer [pk, increment]
+  order_id integer [not null]
+  amount "decimal(10,2)" [not null]
+  paid_at timestamp
+}
+
+// One-to-many written from the "one" side, inline.
+Table admins {
+  id integer [pk, increment, ref: < merchants.admin_id]
+  login varchar(64) [not null, unique]
+}
+
+// Short form, many-to-one, with referential actions.
+Ref fk_orders_user: orders.user_id > users.id [delete: restrict, update: cascade]
+
+// Short form, one-to-many (written from the parent side).
+Ref: users.country_code > countries.code [delete: set null]
+
+// Optional side: an order may have no coupon.
+Ref: orders.coupon_id >? coupons.id [delete: set null]
+
+// Long form with several refs in one block and per-ref settings.
+Ref order_lines {
+  order_items.order_id > orders.id [delete: cascade]
+}
+
+Ref {
+  order_items.product_id > products.id [delete: restrict, update: no action]
+}
+
+// Long form, one-to-many with explicit name.
+Ref order_payments {
+  orders.id < payments.order_id [delete: cascade]
+}
+
+// Composite foreign keys.
+Ref: products.(merchant_id, merchant_country) > merchants.(id, country_code) [delete: cascade]
+Ref merchant_period_owner: merchant_periods.(merchant_id, country_code) > merchants.(id, country_code)
+
+// Many-to-many.
+Ref product_tags: products.id <> tags.id
+
+// Optional side on the "one" end: a product may be uncategorised.
+Ref: categories.id ?< products.category_id

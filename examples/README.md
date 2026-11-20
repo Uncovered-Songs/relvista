@@ -1,0 +1,44 @@
+# Examples
+
+Sample `.dbml` files for **relvista**'s tests, docs and demo. Each one focuses on a part of
+[DBML](https://dbml.dbdiagram.io/docs/) as accepted by `@dbml/parse` 12.1.0 (the version
+pinned in `packages/core`). Every file must compile with zero errors (and currently also has zero
+warnings):
+
+```sh
+pnpm validate:examples                       # all examples
+node scripts/validate-examples.mjs 02 12     # only names containing "02" or "12"
+node scripts/validate-examples.mjs --warnings  # also fail on warnings
+```
+
+A top-level `*.dbml` file is a single-file project. A top-level folder is a multi-file project:
+every `*.dbml` in it is loaded and `main.dbml` is the entry point.
+
+| File                                                                             | Covers                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| [`01-minimal.dbml`](01-minimal.dbml)                                             | Two tables, `pk`, `increment`, `not null`, `unique`, expression default, one inline ref                                                                                                                                                                                                                                                                                                                 |
+| [`02-ecommerce.dbml`](02-ecommerce.dbml)                                         | `Project`; refs in inline, short and long form; all cardinalities `<` `>` `-` `<>`; optional sides `>?` and `?<`; self reference; composite PK via index; composite FKs `t.(a, b) > u.(a, b)`; named refs; `delete` / `update` actions (`cascade`, `restrict`, `set null`, `no action`); junction table and direct many-to-many                                                                         |
+| [`03-enums-and-notes.dbml`](03-enums-and-notes.dbml)                             | Enums (public, schema-qualified, aliased with `as`, quoted values with spaces and emoji, value notes); notes on project, table (`Note:` and `Note { }`), column, index; multi-line `'''` notes with Markdown (headings, lists, links, tables)                                                                                                                                                           |
+| [`04-indexes-and-checks.dbml`](04-indexes-and-checks.dbml)                       | Column settings; default kinds (number, decimal, string, boolean, `null`, backtick expression); quoted type names (`"double precision"`, `"bigint unsigned"`); indexes: single, composite, `pk`, `unique`, `name`, `note`, `type: hash` / `btree`, expression, mixed expression + column, sort order `[asc]` / `[desc]`; column-level `check:` (several per column) and `checks { }` blocks with `name` |
+| [`05-table-groups.dbml`](05-table-groups.dbml)                                   | `TableGroup` with `color`, note as a setting and as a body `Note:`, custom properties, schema-qualified members, a group without settings                                                                                                                                                                                                                                                               |
+| [`06-header-colors.dbml`](06-header-colors.dbml)                                 | `headercolor` in `#rrggbb` and `#rgb` form; header color inherited from a `TablePartial`; ref line `color` in short and long form                                                                                                                                                                                                                                                                       |
+| [`07-sticky-notes.dbml`](07-sticky-notes.dbml)                                   | Sticky notes: single-line, multi-line, `color`, transparent `color: none`, custom properties; contrasted with a table note                                                                                                                                                                                                                                                                              |
+| [`08-diagram-views.dbml`](08-diagram-views.dbml)                                 | Five `DiagramView` blocks: everything (`{ * }` in all categories), empty, a table list, mixed `Tables` / `Notes` / `TableGroups` / `Schemas`, schema-only                                                                                                                                                                                                                                               |
+| [`09-table-partials.dbml`](09-table-partials.dbml)                               | `TablePartial` with columns, settings and indexes; injection with `~name`; several partials per table; conflict resolution (local beats partial, later partial beats earlier); `inactive` ref                                                                                                                                                                                                           |
+| [`10-records.dbml`](10-records.dbml)                                             | `records` outside a table with a column list, inside a table with explicit and implicit columns; strings with `\'` escape, integers, negatives, decimals, `1.5e1`, booleans as `true` / `'N'` / `0`, `null` and empty fields, dates, times, ISO timestamps with offset, enum constants and enum strings, backtick expressions; `[example]` records inside and outside tables                            |
+| [`11-multi-schema.dbml`](11-multi-schema.dbml)                                   | `schema.table` names; schema-qualified and aliased enums; table alias (`as U`) used in refs; cross-schema refs in inline, short and long form; explicit `public.` prefix; group of schema-qualified tables                                                                                                                                                                                              |
+| [`12-modules/`](12-modules/)                                                     | Module system: `use * from`, selective `use { table … tablepartial … }`, `as` aliases to avoid name clashes, importing a whole `schema`, a `tablegroup` and a sticky `note`, a barrel file that re-exports with `reuse`, `.dbml` extension optional in specifiers, nested folder, front matter, `Metadata` blocks on imported elements, a `DiagramView` over imported tables                            |
+| [`13-project-settings-and-metadata.dbml`](13-project-settings-and-metadata.dbml) | Front matter; `Project` with `database_type` and Markdown note; inline custom properties on tables, columns, groups, sticky notes and refs with every value type (string, number incl. decimal and negative, boolean, color); `Metadata` blocks for `Table`, `Column`, `TableGroup`, `Note` and `Ref` (named refs); `inactive` refs in short and long form, combined with other settings                |
+| [`14-large.dbml`](14-large.dbml)                                                 | 61-table multi-tenant SaaS schema (tenancy, identity, billing, work tracking, content, platform, analytics) with 94 refs, 7 colored table groups and 2 views, for layout and rendering performance                                                                                                                                                                                                      |
+
+## Notes on the module example
+
+- `use` is not transitive; `common/index.dbml` uses `reuse` so `main.dbml` sees `users`,
+  `orders`, `user_role` and the `timestamps` partial through one import.
+- `@dbml/parse` 12.1.0 requires a table's partials to be in scope wherever the table is
+  imported, so `common/orders.dbml` imports `tablepartial timestamps` next to `table users`.
+
+## Adding an example
+
+Keep each file focused on one feature area and realistic enough to read as a real schema.
+Use only syntax the pinned parser accepts, run `pnpm validate:examples`, and add a row above.

@@ -1,0 +1,45 @@
+// Sticky notes on the canvas: single-line, multi-line, colored, transparent
+// (color: none), with custom properties, alongside a table note for contrast.
+
+Table jobs {
+  id integer [pk, increment]
+  name varchar(100) [not null]
+  schedule varchar(64) [note: 'cron expression']
+  last_run_at timestamp
+
+  Note: 'Table note: belongs to the table, not to the canvas.'
+}
+
+Table job_runs {
+  id bigint [pk, increment]
+  job_id integer [not null, ref: > jobs.id]
+  started_at timestamp [not null]
+  finished_at timestamp
+  exit_code integer
+}
+
+Note single_line_note {
+  'This is a single line note'
+}
+
+Note multiple_lines_note {
+'''
+  This is a multiple lines note
+  This string can span over multiple lines.
+
+  - job_runs are pruned after 90 days
+  - exit_code null means the run is still going
+'''
+}
+
+Note reminder [color: #F4D03F] {
+  'Remember to add a retry_count column before the v2 scheduler ships.'
+}
+
+Note floating_title [color: none] {
+  'Scheduler'
+}
+
+Note review_status [author: 'docs', reviewed: false, color: #AED6F1] {
+  'Reviewed by the platform team in Q3.'
+}

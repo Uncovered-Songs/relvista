@@ -1,0 +1,66 @@
+// TableGroups: membership, color, note as a setting, note as a body field,
+// custom properties, and a group holding schema-qualified tables.
+
+Table merchants {
+  id integer [pk]
+  name varchar
+}
+
+Table countries {
+  code char(2) [pk]
+  name varchar
+}
+
+Table products {
+  id integer [pk]
+  merchant_id integer [ref: > merchants.id]
+  name varchar
+}
+
+Table orders {
+  id integer [pk]
+  product_id integer [ref: > products.id]
+  quantity integer
+}
+
+Table users {
+  id integer [pk]
+  country_code char(2) [ref: > countries.code]
+}
+
+Table billing.invoices {
+  id integer [pk]
+  order_id integer [ref: > orders.id]
+  total numeric
+}
+
+Table billing.invoice_lines {
+  id integer [pk]
+  invoice_id integer [ref: > billing.invoices.id]
+  amount numeric
+}
+
+TableGroup e_commerce [color: #3498DB, note: 'Contains tables that are related to e-commerce system'] {
+  merchants
+  countries
+}
+
+TableGroup catalog [color: #79AD51] {
+  products
+  orders
+
+  Note: '''
+    Catalog and ordering.
+    Orders reference products directly; there is no cart table.
+  '''
+}
+
+TableGroup billing_group [color: #e67e22, team: 'finance', reviewed: true] {
+  billing.invoices
+  billing.invoice_lines
+}
+
+// A group with no settings at all.
+TableGroup people {
+  users
+}

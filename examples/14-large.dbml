@@ -1,0 +1,652 @@
+// Generated-looking multi-tenant SaaS schema (~60 tables) for layout and render
+// performance tests. Plain public schema, inline refs, table groups with colors.
+
+Project saas_large {
+  database_type: 'PostgreSQL'
+  Note: 'Synthetic SaaS schema for layout performance.'
+}
+
+Table organizations {
+  id bigint [pk, increment]
+  name varchar(200) [not null]
+  slug varchar(80) [not null, unique]
+  plan_id bigint
+  region varchar(16) [not null, default: 'eu-west-1']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+
+  Note: 'Top-level tenant'
+}
+
+Table workspaces {
+  id bigint [pk, increment]
+  organization_id bigint [not null, ref: > organizations.id]
+  name varchar(200) [not null]
+  is_default boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table users {
+  id bigint [pk, increment]
+  email varchar(320) [not null, unique]
+  full_name varchar(200)
+  locale varchar(10) [default: 'en']
+  last_seen_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table user_identities {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  provider varchar(32) [not null]
+  subject varchar(255) [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table user_sessions {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  ip inet
+  user_agent text
+  expires_at timestamptz [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table api_tokens {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  created_by bigint [not null, ref: > users.id]
+  name varchar(100) [not null]
+  token_hash char(64) [not null, unique]
+  last_used_at timestamptz
+  revoked_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table memberships {
+  organization_id bigint [not null, ref: > organizations.id]
+  user_id bigint [not null, ref: > users.id]
+  role_id bigint [not null, ref: > roles.id]
+  joined_at timestamptz [not null, default: `now()`]
+  indexes {
+    (organization_id, user_id) [pk]
+  }
+}
+
+Table roles {
+  id bigint [pk, increment]
+  organization_id bigint [ref: > organizations.id]
+  name varchar(64) [not null]
+  is_system boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table permissions {
+  id bigint [pk, increment]
+  code varchar(100) [not null, unique]
+  description text
+}
+
+Table role_permissions {
+  role_id bigint [not null, ref: > roles.id]
+  permission_id bigint [not null, ref: > permissions.id]
+  indexes {
+    (role_id, permission_id) [pk]
+  }
+}
+
+Table invitations {
+  id bigint [pk, increment]
+  organization_id bigint [not null, ref: > organizations.id]
+  invited_by bigint [not null, ref: > users.id]
+  role_id bigint [not null, ref: > roles.id]
+  email varchar(320) [not null]
+  token char(32) [not null, unique]
+  accepted_at timestamptz
+  expires_at timestamptz [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table teams {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  name varchar(100) [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table team_members {
+  team_id bigint [not null, ref: > teams.id]
+  user_id bigint [not null, ref: > users.id]
+  indexes {
+    (team_id, user_id) [pk]
+  }
+}
+
+Table plans {
+  id bigint [pk, increment]
+  code varchar(32) [not null, unique]
+  name varchar(100) [not null]
+  monthly_price_cents integer [not null]
+  seat_limit integer
+  is_public boolean [not null, default: true]
+}
+
+Table plan_features {
+  id bigint [pk, increment]
+  plan_id bigint [not null, ref: > plans.id]
+  feature_key varchar(64) [not null]
+  limit_value integer
+}
+
+Table subscriptions {
+  id bigint [pk, increment]
+  organization_id bigint [not null, ref: > organizations.id]
+  plan_id bigint [not null, ref: > plans.id]
+  status varchar(20) [not null]
+  seats integer [not null, default: 1]
+  current_period_end timestamptz
+  canceled_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table subscription_items {
+  id bigint [pk, increment]
+  subscription_id bigint [not null, ref: > subscriptions.id]
+  price_code varchar(64) [not null]
+  quantity integer [not null, default: 1]
+}
+
+Table invoices {
+  id bigint [pk, increment]
+  organization_id bigint [not null, ref: > organizations.id]
+  subscription_id bigint [ref: > subscriptions.id]
+  number varchar(32) [not null, unique]
+  status varchar(20) [not null]
+  total_cents bigint [not null]
+  currency char(3) [not null, default: 'EUR']
+  issued_at timestamptz
+  due_at timestamptz
+}
+
+Table invoice_lines {
+  id bigint [pk, increment]
+  invoice_id bigint [not null, ref: > invoices.id]
+  description varchar(300) [not null]
+  quantity integer [not null]
+  unit_amount_cents bigint [not null]
+}
+
+Table payment_methods {
+  id bigint [pk, increment]
+  organization_id bigint [not null, ref: > organizations.id]
+  kind varchar(20) [not null]
+  brand varchar(20)
+  last4 char(4)
+  is_default boolean [not null, default: false]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table payments {
+  id bigint [pk, increment]
+  invoice_id bigint [not null, ref: > invoices.id]
+  payment_method_id bigint [ref: > payment_methods.id]
+  amount_cents bigint [not null]
+  status varchar(20) [not null]
+  provider_ref varchar(100)
+  paid_at timestamptz
+}
+
+Table refunds {
+  id bigint [pk, increment]
+  payment_id bigint [not null, ref: > payments.id]
+  amount_cents bigint [not null]
+  reason text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table coupons {
+  id bigint [pk, increment]
+  code varchar(32) [not null, unique]
+  percent_off smallint
+  amount_off_cents bigint
+  valid_until timestamptz
+}
+
+Table coupon_redemptions {
+  id bigint [pk, increment]
+  coupon_id bigint [not null, ref: > coupons.id]
+  subscription_id bigint [not null, ref: > subscriptions.id]
+  redeemed_at timestamptz [not null, default: `now()`]
+}
+
+Table usage_records {
+  id bigint [pk, increment]
+  subscription_item_id bigint [not null, ref: > subscription_items.id]
+  quantity bigint [not null]
+  recorded_at timestamptz [not null]
+}
+
+Table tax_rates {
+  id bigint [pk, increment]
+  country char(2) [not null]
+  region varchar(10)
+  percentage "decimal(5,2)" [not null]
+}
+
+Table projects {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  owner_id bigint [not null, ref: > users.id]
+  key varchar(10) [not null]
+  name varchar(200) [not null]
+  archived_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table project_members {
+  project_id bigint [not null, ref: > projects.id]
+  user_id bigint [not null, ref: > users.id]
+  access varchar(10) [not null, default: 'write']
+  indexes {
+    (project_id, user_id) [pk]
+  }
+}
+
+Table boards {
+  id bigint [pk, increment]
+  project_id bigint [not null, ref: > projects.id]
+  name varchar(100) [not null]
+  position integer [not null, default: 0]
+}
+
+Table board_columns {
+  id bigint [pk, increment]
+  board_id bigint [not null, ref: > boards.id]
+  name varchar(100) [not null]
+  position integer [not null]
+  wip_limit integer
+}
+
+Table milestones {
+  id bigint [pk, increment]
+  project_id bigint [not null, ref: > projects.id]
+  title varchar(200) [not null]
+  due_on date
+  closed_at timestamptz
+}
+
+Table issues {
+  id bigint [pk, increment]
+  project_id bigint [not null, ref: > projects.id]
+  column_id bigint [ref: > board_columns.id]
+  milestone_id bigint [ref: > milestones.id]
+  reporter_id bigint [not null, ref: > users.id]
+  assignee_id bigint [ref: > users.id]
+  parent_id bigint [ref: > issues.id]
+  number integer [not null]
+  title varchar(300) [not null]
+  description text
+  priority smallint [not null, default: 3]
+  estimate_points smallint
+  closed_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+
+  Note: 'Core work item'
+}
+
+Table issue_comments {
+  id bigint [pk, increment]
+  issue_id bigint [not null, ref: > issues.id]
+  author_id bigint [not null, ref: > users.id]
+  body text [not null]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table labels {
+  id bigint [pk, increment]
+  project_id bigint [not null, ref: > projects.id]
+  name varchar(50) [not null]
+  color char(7) [not null, default: '#cccccc']
+}
+
+Table issue_labels {
+  issue_id bigint [not null, ref: > issues.id]
+  label_id bigint [not null, ref: > labels.id]
+  indexes {
+    (issue_id, label_id) [pk]
+  }
+}
+
+Table issue_links {
+  id bigint [pk, increment]
+  source_issue_id bigint [not null, ref: > issues.id]
+  target_issue_id bigint [not null, ref: > issues.id]
+  kind varchar(20) [not null]
+}
+
+Table issue_watchers {
+  issue_id bigint [not null, ref: > issues.id]
+  user_id bigint [not null, ref: > users.id]
+  indexes {
+    (issue_id, user_id) [pk]
+  }
+}
+
+Table time_entries {
+  id bigint [pk, increment]
+  issue_id bigint [not null, ref: > issues.id]
+  user_id bigint [not null, ref: > users.id]
+  minutes integer [not null]
+  spent_on date [not null]
+  note text
+}
+
+Table sprints {
+  id bigint [pk, increment]
+  board_id bigint [not null, ref: > boards.id]
+  name varchar(100) [not null]
+  starts_on date [not null]
+  ends_on date [not null]
+}
+
+Table sprint_issues {
+  sprint_id bigint [not null, ref: > sprints.id]
+  issue_id bigint [not null, ref: > issues.id]
+  indexes {
+    (sprint_id, issue_id) [pk]
+  }
+}
+
+Table custom_fields {
+  id bigint [pk, increment]
+  project_id bigint [not null, ref: > projects.id]
+  name varchar(100) [not null]
+  field_type varchar(20) [not null]
+}
+
+Table custom_field_values {
+  id bigint [pk, increment]
+  custom_field_id bigint [not null, ref: > custom_fields.id]
+  issue_id bigint [not null, ref: > issues.id]
+  value_text text
+  value_number numeric
+}
+
+Table documents {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  author_id bigint [not null, ref: > users.id]
+  parent_id bigint [ref: > documents.id]
+  title varchar(300) [not null]
+  body jsonb
+  published_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table document_versions {
+  id bigint [pk, increment]
+  document_id bigint [not null, ref: > documents.id]
+  author_id bigint [not null, ref: > users.id]
+  version integer [not null]
+  body jsonb [not null]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table attachments {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  uploaded_by bigint [not null, ref: > users.id]
+  issue_id bigint [ref: > issues.id]
+  document_id bigint [ref: > documents.id]
+  file_name varchar(255) [not null]
+  content_type varchar(100)
+  size_bytes bigint [not null]
+  storage_key varchar(500) [not null, unique]
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table reactions {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  comment_id bigint [not null, ref: > issue_comments.id]
+  emoji varchar(32) [not null]
+}
+
+Table mentions {
+  id bigint [pk, increment]
+  comment_id bigint [not null, ref: > issue_comments.id]
+  mentioned_user_id bigint [not null, ref: > users.id]
+  notified boolean [not null, default: false]
+}
+
+Table notifications {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  kind varchar(40) [not null]
+  payload jsonb [not null]
+  read_at timestamptz
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table notification_preferences {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  channel varchar(20) [not null]
+  kind varchar(40) [not null]
+  enabled boolean [not null, default: true]
+}
+
+Table integrations {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  installed_by bigint [not null, ref: > users.id]
+  provider varchar(40) [not null]
+  config jsonb
+  status varchar(20) [not null, default: 'active']
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table webhooks {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  url varchar(1000) [not null]
+  secret char(32) [not null]
+  events text[]
+  is_active boolean [not null, default: true]
+  created_at timestamptz [not null, default: `now()`]
+  updated_at timestamptz
+}
+
+Table webhook_deliveries {
+  id bigint [pk, increment]
+  webhook_id bigint [not null, ref: > webhooks.id]
+  event varchar(64) [not null]
+  status_code smallint
+  attempt smallint [not null, default: 1]
+  delivered_at timestamptz
+}
+
+Table audit_events {
+  id bigint [pk, increment]
+  organization_id bigint [not null, ref: > organizations.id]
+  actor_id bigint [ref: > users.id]
+  action varchar(100) [not null]
+  target_type varchar(50)
+  target_id bigint
+  ip inet
+  occurred_at timestamptz [not null, default: `now()`]
+}
+
+Table feature_flags {
+  id bigint [pk, increment]
+  key varchar(100) [not null, unique]
+  description text
+  rollout_percent smallint [not null, default: 0]
+}
+
+Table feature_flag_overrides {
+  id bigint [pk, increment]
+  feature_flag_id bigint [not null, ref: > feature_flags.id]
+  organization_id bigint [not null, ref: > organizations.id]
+  enabled boolean [not null]
+}
+
+Table saved_views {
+  id bigint [pk, increment]
+  user_id bigint [not null, ref: > users.id]
+  project_id bigint [not null, ref: > projects.id]
+  name varchar(100) [not null]
+  filters jsonb [not null]
+}
+
+Table search_index_jobs {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  status varchar(20) [not null]
+  started_at timestamptz
+  finished_at timestamptz
+}
+
+Table exports {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  requested_by bigint [not null, ref: > users.id]
+  format varchar(10) [not null]
+  status varchar(20) [not null]
+  storage_key varchar(500)
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table imports {
+  id bigint [pk, increment]
+  workspace_id bigint [not null, ref: > workspaces.id]
+  requested_by bigint [not null, ref: > users.id]
+  source varchar(40) [not null]
+  status varchar(20) [not null]
+  error text
+  created_at timestamptz [not null, default: `now()`]
+}
+
+Table daily_active_users {
+  day date
+  organization_id bigint [ref: > organizations.id]
+  users integer [not null]
+  indexes {
+    (day, organization_id) [pk]
+  }
+}
+
+Table issue_metrics {
+  issue_id bigint [pk, ref: > issues.id]
+  cycle_time_hours numeric
+  reopened_count smallint [not null, default: 0]
+}
+
+Ref: organizations.plan_id > plans.id [delete: set null]
+
+TableGroup tenancy [color: #2c3e50] {
+  organizations
+  workspaces
+  memberships
+  roles
+  permissions
+  role_permissions
+  invitations
+  teams
+  team_members
+}
+
+TableGroup identity [color: #8e44ad] {
+  users
+  user_identities
+  user_sessions
+  api_tokens
+}
+
+TableGroup billing [color: #27ae60] {
+  plans
+  plan_features
+  subscriptions
+  subscription_items
+  invoices
+  invoice_lines
+  payment_methods
+  payments
+  refunds
+  coupons
+  coupon_redemptions
+  usage_records
+  tax_rates
+}
+
+TableGroup work [color: #2980b9] {
+  projects
+  project_members
+  boards
+  board_columns
+  milestones
+  issues
+  issue_comments
+  labels
+  issue_labels
+  issue_links
+  issue_watchers
+  time_entries
+  sprints
+  sprint_issues
+  custom_fields
+  custom_field_values
+}
+
+TableGroup content [color: #d35400] {
+  documents
+  document_versions
+  attachments
+  reactions
+  mentions
+}
+
+TableGroup platform [color: #7f8c8d] {
+  notifications
+  notification_preferences
+  integrations
+  webhooks
+  webhook_deliveries
+  audit_events
+  feature_flags
+  feature_flag_overrides
+  saved_views
+  search_index_jobs
+  exports
+  imports
+}
+
+TableGroup analytics [color: #c0392b] {
+  daily_active_users
+  issue_metrics
+}
+
+DiagramView billing_only {
+  TableGroups { billing }
+}
+
+DiagramView work_and_identity {
+  TableGroups {
+    work
+    identity
+  }
+}

@@ -1,0 +1,93 @@
+// Several schemas: schema.table names, schema-qualified enums, table aliases,
+// cross-schema refs in inline, short and long form, and the implicit public schema.
+
+enum core.account_status {
+  active
+  suspended
+  closed
+}
+
+enum billing.invoice_state as InvoiceState {
+  draft
+  issued
+  paid
+  void
+}
+
+Table core.users as U {
+  id integer [pk, increment]
+  email varchar(255) [not null, unique]
+  status core.account_status [not null, default: 'active']
+}
+
+Table core.organizations {
+  id integer [pk, increment]
+  name varchar(200) [not null]
+}
+
+Table core.memberships {
+  user_id integer [ref: > U.id]
+  organization_id integer [ref: > core.organizations.id]
+  role varchar(20) [not null]
+
+  indexes {
+    (user_id, organization_id) [pk]
+  }
+}
+
+Table blogging.posts {
+  id integer [pk, increment]
+  user_id integer [ref: > core.users.id]
+  title varchar(300)
+  published_at timestamp
+}
+
+Table blogging.comments {
+  id integer [pk, increment]
+  post_id integer [not null]
+  author_id integer [not null]
+  body text
+}
+
+Table billing.invoices {
+  id integer [pk, increment]
+  organization_id integer [not null]
+  state InvoiceState [not null, default: 'draft']
+  total "decimal(12,2)"
+}
+
+Table billing.invoice_lines {
+  id integer [pk, increment]
+  invoice_id integer [not null]
+  description varchar(300)
+  amount "decimal(12,2)"
+}
+
+// No schema prefix: lives in public.
+Table feature_flags {
+  key varchar(64) [pk]
+  enabled boolean [not null, default: false]
+  owner_id integer
+}
+
+// Short form, cross-schema
+Ref: blogging.comments.post_id > blogging.posts.id [delete: cascade]
+Ref: blogging.comments.author_id > U.id
+
+// Long form, cross-schema
+Ref billing_owner {
+  billing.invoices.organization_id > core.organizations.id [delete: restrict]
+}
+
+Ref {
+  billing.invoice_lines.invoice_id > billing.invoices.id [delete: cascade]
+}
+
+// public -> core
+Ref: public.feature_flags.owner_id > core.users.id [delete: set null]
+
+TableGroup core_tables [color: #34495e] {
+  core.users
+  core.organizations
+  core.memberships
+}

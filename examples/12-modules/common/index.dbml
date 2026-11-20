@@ -1,0 +1,4 @@
+// Barrel file: `reuse` re-exports so importers of common/index see these elements
+// without knowing the folder layout. A plain `use` would keep them private here.
+reuse * from './users'
+reuse * from './orders'

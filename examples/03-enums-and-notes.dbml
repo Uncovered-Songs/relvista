@@ -1,0 +1,113 @@
+// Enums (public and schema-qualified, aliased, quoted values, value notes) and every
+// place a note can go: project, table (both syntaxes), column, index, enum value.
+// Multi-line notes use ''' strings and may contain Markdown.
+
+Project helpdesk {
+  database_type: 'PostgreSQL'
+  Note: '''
+    # Helpdesk
+
+    Support ticketing schema.
+
+    ## Conventions
+    * all timestamps are UTC
+    * soft deletes are **not** used; closed tickets stay forever
+    * see [the runbook](https://example.com/runbook) for escalation rules
+  '''
+}
+
+enum ticket_status {
+  new [note: 'Created, nobody looked at it yet']
+  open
+  pending [note: 'Waiting on the customer']
+  solved
+  closed
+}
+
+enum ticket_priority {
+  low
+  normal
+  high
+  urgent [note: 'Pages the on-call agent']
+}
+
+enum support.channel as Channel {
+  email
+  chat
+  phone
+  "web form"
+}
+
+enum satisfaction {
+  "😀 good"
+  "😐 okay"
+  "🙁 bad"
+  "Not Yet Rated"
+}
+
+Table customers {
+  id integer [pk, increment]
+  name varchar(200) [not null]
+  email varchar(255) [not null, unique, note: 'Lower-cased before insert']
+  Note: 'People who open tickets'
+}
+
+Table agents {
+  id integer [pk, increment]
+  name varchar(200) [not null]
+  team varchar(50)
+
+  Note {
+    'Support staff. One row per human; bots live in `automations`.'
+  }
+}
+
+Table tickets {
+  id integer [pk, increment]
+  customer_id integer [not null, ref: > customers.id]
+  assignee_id integer [ref: > agents.id]
+  status ticket_status [not null, default: 'new']
+  priority ticket_priority [not null, default: 'normal']
+  channel Channel [not null, note: 'Enum referenced through its alias']
+  rating satisfaction
+  subject varchar(300) [not null]
+  status_code smallint [
+    note: '''
+      Legacy numeric status kept for the old reporting job:
+      💸 1 = processing,
+      ✔️ 2 = shipped,
+      ❌ 3 = cancelled,
+      😔 4 = refunded
+    '''
+  ]
+  created_at timestamp [not null, default: `now()`]
+
+  indexes {
+    (status, priority) [name: 'tickets_queue_idx', note: 'Drives the agent queue view']
+    created_at [note: 'Range scans for SLA reports']
+  }
+
+  Note: '''
+    A **ticket** is one support conversation.
+
+    | status  | meaning              |
+    |---------|----------------------|
+    | new     | untriaged            |
+    | pending | waiting on customer  |
+  '''
+}
+
+Table support.channel_settings {
+  channel support.channel [pk, note: 'Enum referenced by its qualified name']
+  enabled boolean [not null, default: true]
+  first_response_minutes integer
+}
+
+Table ticket_comments {
+  id integer [pk, increment]
+  ticket_id integer [not null, ref: > tickets.id]
+  author_agent_id integer [ref: > agents.id]
+  body text [not null, note: 'Markdown, rendered in the agent UI']
+  is_internal boolean [not null, default: false]
+  created_at timestamp [not null, default: `now()`]
+}

@@ -1,0 +1,14 @@
+// The smallest useful diagram: two tables and one relationship.
+
+Table users {
+  id integer [pk, increment]
+  email varchar(255) [not null, unique]
+  created_at timestamp [default: `now()`]
+}
+
+Table posts {
+  id integer [pk, increment]
+  user_id integer [not null, ref: > users.id]
+  title varchar(200) [not null]
+  body text
+}

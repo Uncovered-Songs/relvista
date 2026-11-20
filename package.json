@@ -13,11 +13,17 @@
     "lint": "eslint .",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
-    "validate:examples": "node scripts/validate-examples.mjs"
+    "validate:examples": "node scripts/validate-examples.mjs",
+    "changeset": "changeset"
   },
   "devDependencies": {
+    "@changesets/cli": "^3.0.3",
+    "@eslint/js": "^9",
     "@types/node": "^24",
+    "eslint": "^9",
+    "globals": "^17.14.0",
     "prettier": "^3",
-    "typescript": "~5.9.3"
+    "typescript": "~5.9.3",
+    "typescript-eslint": "^8.73.0"
   }
 }

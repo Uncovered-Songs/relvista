@@ -1,0 +1,66 @@
+// TablePartials: reusable columns, settings and indexes injected with ~name.
+// Shows conflict resolution: local definitions beat partials, later partials beat
+// earlier ones.
+
+TablePartial base_template [headercolor: #ff0000] {
+  id int [pk, not null]
+  created_at timestamp [default: `now()`]
+  updated_at timestamp [default: `now()`]
+}
+
+TablePartial soft_delete_template {
+  delete_status boolean [not null]
+  deleted_at timestamp [default: `now()`]
+}
+
+TablePartial email_index {
+  email varchar [unique]
+  indexes {
+    email [unique]
+  }
+}
+
+TablePartial tenant_scoped [note: 'Row belongs to exactly one tenant'] {
+  tenant_id int [not null]
+  indexes {
+    tenant_id [name: 'tenant_idx']
+  }
+}
+
+// Later partial wins: green header overrides base_template's red one.
+TablePartial green_header [headercolor: #27ae60] {
+}
+
+Table tenants {
+  ~base_template
+  name varchar [not null]
+}
+
+Table users {
+  ~base_template
+  ~email_index
+  name varchar
+  ~soft_delete_template
+}
+
+Table projects {
+  ~base_template
+  ~tenant_scoped
+  ~green_header
+  name varchar [not null]
+  owner_id int
+  // Local column overrides the partial's updated_at (no default here).
+  updated_at timestamp [note: 'Set by the application, not the database']
+}
+
+Table invitations [headercolor: #2980b9] {
+  // Local table setting overrides base_template's header color.
+  ~base_template
+  ~tenant_scoped
+  ~email_index
+  expires_at timestamp [not null]
+}
+
+Ref: projects.owner_id > users.id [inactive]
+Ref: projects.tenant_id > tenants.id
+Ref: invitations.tenant_id > tenants.id [delete: cascade]

@@ -5,7 +5,7 @@ dbdiagram.io uses.
 
 - **Editor website** — open a `.dbml` file, edit it with a live diagram, arrange tables, save it back.
   Static site, no account, no backend.
-- **Docusaurus theme** — render ```` ```dbml ```` code fences and `.dbml` files in your docs with zoom,
+- **Docusaurus theme** — render ` ```dbml ` code fences and `.dbml` files in your docs with zoom,
   pan, fullscreen, print and export.
 - **Core libraries** — parser wrapper, diagram model, layout file and renderer, usable in any React app.
 

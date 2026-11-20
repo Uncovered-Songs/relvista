@@ -1,0 +1,76 @@
+// Sample data with records: outside a table with a column list, inside a table with
+// explicit and implicit column lists, every value type (string with escapes, numbers,
+// booleans in several spellings, null forms, dates/timestamps, enum constants,
+// backtick expressions) and [example] records.
+
+enum Status {
+  active
+  inactive
+  pending
+}
+
+Table users {
+  id int [pk]
+  name varchar
+  age int
+  status Status
+  created_at timestamp
+}
+
+records users(id, name, age, status, created_at) {
+  1, 'Alice', 30, Status.active, '2024-01-15 10:30:00'
+  2, 'Bob', null, 'inactive', `now()`
+  3, 'Charlie', , Status.pending, '2024-01-15'
+  4, 'D\'Arcy', 41, Status.active, '2024-01-15T10:30:00.000+07:00'
+}
+
+Table posts {
+  id int [pk]
+  author_id int [ref: > users.id]
+  title varchar
+  published boolean
+  rating numeric
+
+  records (id, author_id, title, published, rating) {
+    1, 1, 'First Post', true, 4.5
+    2, 1, 'Second Post', false, -1
+    3, 2, 'Drafts are fun', 'N', 1.5e1
+    4, 3, 'Imported', 0, '3.25'
+  }
+}
+
+Table comments {
+  id int [pk]
+  user_id int [ref: > users.id]
+  post_id int [ref: > posts.id]
+  title varchar
+
+  records {
+    1, 2, 1, 'First comment of first post by the second user'
+    2, 1, 1, 'Thanks!'
+  }
+}
+
+Table opening_hours {
+  weekday smallint [pk]
+  opens_at time
+  closes_at time
+
+  records [example] {
+    1, '09:00:00', '17:00:00'
+    6, '10:00:00', '14:00:00'
+    7, null, null
+  }
+}
+
+Table currencies {
+  code char(3) [pk]
+  name varchar
+  minor_units int
+}
+
+records currencies(code, name, minor_units) [example] {
+  'EUR', 'Euro', 2
+  'JPY', 'Japanese yen', 0
+  'KWD', 'Kuwaiti dinar', 3
+}

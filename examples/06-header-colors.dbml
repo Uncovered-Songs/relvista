@@ -1,0 +1,47 @@
+// Table header colors (full #rrggbb and shorthand #rgb forms), relationship line
+// colors in short and long form, and colors coming from a TablePartial.
+
+TablePartial audited [headercolor: #8e44ad] {
+  created_at timestamp [default: `now()`]
+  updated_at timestamp
+}
+
+Table users [headercolor: #3498DB] {
+  id integer [primary key]
+  username varchar(255) [not null, unique]
+}
+
+Table teams [headercolor: #2ECC71] {
+  id integer [pk]
+  name varchar(100) [not null]
+}
+
+Table memberships [headercolor: #f39] {
+  user_id integer
+  team_id integer
+  role varchar(20)
+
+  indexes {
+    (user_id, team_id) [pk]
+  }
+}
+
+Table audit_log {
+  ~audited
+  id bigint [pk, increment]
+  actor_id integer
+  action varchar(64)
+}
+
+Table settings [headercolor: #000] {
+  key varchar(64) [pk]
+  value text
+}
+
+Ref: memberships.user_id > users.id [color: #79AD51]
+
+Ref {
+  memberships.team_id > teams.id [color: #E74C3C, delete: cascade]
+}
+
+Ref: audit_log.actor_id > users.id [color: #999]
