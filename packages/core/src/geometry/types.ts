@@ -4,6 +4,7 @@
  */
 import type { DetailLevel, ViewLayout } from '../layout/types.js';
 
+/** An axis-aligned rectangle in diagram units, top-left origin. */
 export interface Box {
   x: number;
   y: number;
@@ -26,6 +27,12 @@ export interface NodeGeometry extends Box {
 /** A TableGroup's enclosing rectangle, computed around its visible tables. */
 export interface GroupGeometry extends Box {
   id: string;
+  /**
+   * The group is collapsed to one box (layout entry `group:<name>` with `collapsed: true`): its
+   * member tables are absent from `nodes`, refs to them attach to this box. Phase 3, see
+   * docs/design/phase3-v1.md §3.1.
+   */
+  collapsed?: boolean;
 }
 
 /**
@@ -38,6 +45,7 @@ export interface EdgeGeometry {
   points: Array<{ x: number; y: number }>;
 }
 
+/** Where everything is drawn: node and group boxes, ref routes and the overall bounds. */
 export interface DiagramGeometry {
   nodes: Record<string, NodeGeometry>;
   groups: Record<string, GroupGeometry>;
@@ -45,14 +53,21 @@ export interface DiagramGeometry {
   bounds: Box;
 }
 
+/** Which font a text is measured in. */
 export type TextRole = 'tableName' | 'columnName' | 'columnType' | 'noteText';
 
 /** Returns the rendered width in px of `text` in the given role's font. */
 export type TextMeasure = (text: string, role: TextRole) => number;
 
+/** Options shared by every auto-layout engine. */
 export interface LayoutOptions {
-  /** 'elk' (default, async, best), 'dagre' (fast, sync), 'grid' (trivial fallback). */
-  engine?: 'elk' | 'dagre' | 'grid';
+  /**
+   * 'elk' (default of `layoutDiagram`, async, best), 'dagre' (fast, sync, default of
+   * `layoutDiagramSync`), 'grid' (trivial fallback), 'auto' (`layoutDiagram`: dagre for small
+   * connected components without groups, ELK for the rest; `layoutDiagramSync` treats it as
+   * dagre). See docs/design/autolayout.md.
+   */
+  engine?: 'elk' | 'dagre' | 'grid' | 'auto';
   direction?: 'RIGHT' | 'DOWN';
   detailLevel?: DetailLevel;
   /** Saved positions for this view; nodes with x/y keep them, the rest are placed around them. */

@@ -1,5 +1,6 @@
 /** Shell: TopBar, SplitPane(Code, Diagram) or mobile tabs, StatusBar, dialogs, toasts, drop target. */
-import { useEffect, useState, type ReactElement } from 'react';
+import { Suspense, lazy, useEffect, useState, type ReactElement } from 'react';
+import { CompareDiffPane } from './components/CompareDiffPane.js';
 import { ConfirmDialog } from './components/ConfirmDialog.js';
 import { EmptyState } from './components/EmptyState.js';
 import { EntryPickerDialog } from './components/EntryPickerDialog.js';
@@ -21,12 +22,20 @@ import { detectMac, matchShortcut, zoneOf, type ShortcutAction } from './keyboar
 import { MonacoEditor } from './monaco/MonacoEditor.js';
 import { store, useEditor } from './state/store.js';
 
+// Rarely opened dialogs load on first use (code-split from the editor's first load).
+const CompareDialog = lazy(() =>
+  import('./components/CompareDialog.js').then((m) => ({ default: m.CompareDialog })),
+);
+const PdfExportDialog = lazy(() =>
+  import('./components/PdfExportDialog.js').then((m) => ({ default: m.PdfExportDialog })),
+);
+
 const MAC = detectMac();
 /**
  * Global commands: handled in the capture phase before Monaco or React Flow see the key, so
  * neither can swallow them (Monaco would otherwise open its own bindings, the browser its dialogs).
  */
-const GLOBAL = new Set<ShortcutAction>(['save', 'saveAs', 'open', 'autoLayout']);
+const GLOBAL = new Set<ShortcutAction>(['save', 'saveAs', 'open', 'autoLayout', 'compare']);
 
 function focusCode(): void {
   store.setTab('code');
@@ -70,7 +79,24 @@ function run(action: ShortcutAction): void {
       return focusDiagram();
     case 'help':
       return store.openDialog({ kind: 'help' });
+    case 'search':
+      return openSearch();
+    case 'compare':
+      return store.openDialog({ kind: 'compare' });
   }
+}
+
+/** Mod+K / '/': opens the search panel over the diagram (or moves the focus into it). */
+function openSearch(): void {
+  if (!store.getState().compile.model) return;
+  store.setTab('diagram');
+  if (store.getState().search) {
+    requestAnimationFrame(() =>
+      document.querySelector<HTMLInputElement>('.ed-diagram .rv-nav-search input')?.focus(),
+    );
+    return;
+  }
+  store.openSearch();
 }
 
 function useGlobalHandlers(): boolean {
@@ -161,14 +187,18 @@ function useGlobalHandlers(): boolean {
 
 function CodePane(): ReactElement {
   const empty = useEditor((s) => s.entryEmpty && s.ready);
+  // Compare mode's "Code diff": the read-only diff editor covers the editor, which stays mounted
+  // (the diagram's reveal-in-code and the store keep using it).
+  const codeDiff = useEditor((s) => s.compare?.codeDiff === true);
   return (
     // `nokey`: React Flow's document key handlers skip it. Monaco 0.57 types into an EditContext
     // <div>, not a textarea, so without it React Flow would swallow Space (its pan key).
     <section className="ed-code nokey" aria-label="Code">
       <FileTabs />
-      <div className="ed-code__editor">
+      <div className={`ed-code__editor${codeDiff ? ' ed-code__editor--hidden' : ''}`}>
         <MonacoEditor />
-        {empty && <EmptyState />}
+        {empty && !codeDiff && <EmptyState />}
+        {codeDiff && <CompareDiffPane />}
       </div>
     </section>
   );
@@ -187,6 +217,18 @@ function Dialogs(): ReactElement | null {
       return <SqlImportDialog onClose={close} />;
     case 'help':
       return <HelpDialog onClose={close} />;
+    case 'compare':
+      return (
+        <Suspense fallback={null}>
+          <CompareDialog onClose={close} />
+        </Suspense>
+      );
+    case 'pdf':
+      return (
+        <Suspense fallback={null}>
+          <PdfExportDialog onClose={close} />
+        </Suspense>
+      );
     case 'url':
       return <UrlDialog initial={dialog.initial} onClose={close} />;
     case 'remote-error':

@@ -18,8 +18,9 @@ your files stay on your disk. This page is about adding diagrams to a Docusaurus
 
 ## Requirements
 
-- Docusaurus 3.6 or later (tested with 3.10) with the classic theme or preset
-- React 18 or 19
+- Docusaurus 3.6 or later with the classic theme or preset (tested with 3.6 and 3.10)
+- React 18 or 19 (Docusaurus supports React 19 from 3.7)
+- Node 20 or later
 
 ## Install
 
@@ -42,7 +43,7 @@ const config: Config = {
     dbml: {
       height: 480, // px, or any CSS length such as '60vh'
       detailLevel: 'all', // 'all' | 'keys' | 'names'
-      toolbar: ['view', 'zoom', 'fit', 'fullscreen', 'export', 'print', 'open-in-editor'],
+      toolbar: ['view', 'search', 'detail', 'zoom', 'fit', 'fullscreen', 'export', 'print', 'link'],
       palette: 'site', // 'site' | 'relvista'
     },
   },
@@ -51,13 +52,14 @@ const config: Config = {
 export default config;
 ```
 
-| `themeConfig.dbml` | Default       | Meaning                                                                                                                       |
-| ------------------ | ------------- | ----------------------------------------------------------------------------------------------------------------------------- |
-| `height`           | `480`         | Height of each diagram. A number is pixels; a string is any CSS length.                                                       |
-| `detailLevel`      | `'all'`       | `all` columns, `keys` only (primary and foreign keys, unique columns), or table `names` only.                                 |
-| `toolbar`          | every button  | Toolbar buttons in order: `view`, `zoom`, `fit`, `fullscreen`, `export`, `print`, `open-in-editor`.                           |
-| `editorUrl`        | hosted editor | Base URL of the relvista [editor](./editor.md) for the "Open in editor" button; `false` hides it.                             |
-| `palette`          | `'site'`      | `site`: diagrams take your site's Infima colours and fonts; `relvista`: relvista's own palette (see [Colours](./colours.md)). |
+| `themeConfig.dbml` | Default       | Meaning                                                                                                                                                                                      |
+| ------------------ | ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `height`           | `480`         | Height of each diagram. A number is pixels; a string is any CSS length.                                                                                                                      |
+| `detailLevel`      | `'all'`       | `all` columns, `keys` only (primary and foreign keys, unique columns), or table `names` only.                                                                                                |
+| `toolbar`          | every button  | Toolbar buttons in order: `view`, `search`, `detail`, `zoom`, `fit`, `fullscreen`, `export`, `print`, `link`, `open-in-editor` ([toolbar](./usage.mdx#toolbar-fullscreen-export-and-print)). |
+| `editorUrl`        | hosted editor | Base URL of the relvista [editor](./editor.md) for the "Open in editor" button; `false` hides it.                                                                                            |
+| `palette`          | `'site'`      | `site`: diagrams take your site's Infima colours and fonts; `relvista`: relvista's own palette (see [Colours](./colours.md)).                                                                |
+| `ssr`              | `true`        | Draw each diagram as a static SVG at build time, shown before (and without) JavaScript (see [Usage](./usage.mdx#build-time-pictures)).                                                       |
 
 The one plugin option, `highlight` (default `true`), adds DBML syntax highlighting for
 ` ```dbml static ` blocks and the Source tab: `plugins: [['@relvista/docusaurus-plugin', { highlight: false }]]`.
@@ -110,11 +112,13 @@ Table posts {
 ```
 
 Drag the tables, scroll to zoom, hover a table to trace its relationships and click it for details.
-**Open in editor** in the toolbar opens the diagram in the [editor](./editor.md).
+The toolbar [searches](./exploring.mdx) the diagram, changes the detail level, exports it
+(SVG, PNG, PDF), copies a link to it, and **Open in editor** opens it in the
+[editor](./editor.md).
 
 ## TypeScript
 
-To import `.dbml` files and `@theme/DbmlDiagram` with types, add the plugin's client types to your
+To import `.dbml` files, `@theme/DbmlDiagram` and `@theme/DbmlDiff` with types, add the plugin's client types to your
 site's `tsconfig.json`:
 
 ```json title="tsconfig.json"
@@ -126,4 +130,5 @@ site's `tsconfig.json`:
 }
 ```
 
-Next: [all the ways to use it](./usage.mdx).
+Next: [all the ways to use it](./usage.mdx), [diagram views](./views.mdx) and
+[schema diffs](./diff.mdx).

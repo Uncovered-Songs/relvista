@@ -1,7 +1,19 @@
 import { tableTitle, type DiagramModel, type Table } from '@relvista/core';
 import { typeLabel } from '../svg/TableSvg.js';
-import { useEffect, useRef, type ReactElement } from 'react';
-import { CloseIcon } from './icons.js';
+import { createContext, useContext, useEffect, useRef, type ReactElement } from 'react';
+import { CloseIcon, RouteIcon } from './icons.js';
+
+/**
+ * Actions the side card offers on top of the details, provided by the host around the canvas
+ * (DbmlViewer: "Show related" → focus mode, docs/design/phase3-v1.md §4.7). The canvas renders
+ * the card, so the host reaches it through context.
+ */
+export interface SideCardActions {
+  /** Shows the table with its related tables only (focus mode, 1 hop). */
+  onShowRelated?(tableId: string): void;
+}
+
+export const SideCardActionsContext = createContext<SideCardActions | null>(null);
 
 function flags(c: Table['columns'][number]): string[] {
   const f: string[] = [];
@@ -23,6 +35,7 @@ export function SideCard({
   model: DiagramModel;
   onClose(): void;
 }): ReactElement {
+  const actions = useContext(SideCardActionsContext);
   const refs = model.refs.filter((r) => r.from.tableId === table.id || r.to.tableId === table.id);
   const root = useRef<HTMLElement>(null);
   const close = useRef(onClose);
@@ -34,6 +47,9 @@ export function SideCard({
     root.current?.focus();
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented) return;
+      // Esc inside another layer (search panel, dialog) is that layer's.
+      const t = e.target as Element | null;
+      if (t && typeof t.closest === 'function' && t.closest('.rv-nav-layer')) return;
       e.preventDefault();
       close.current();
     };
@@ -73,6 +89,18 @@ export function SideCard({
         </button>
       </header>
       <div className="rv-sidecard-body">
+        {actions?.onShowRelated ? (
+          <div className="rv-sidecard-actions">
+            <button
+              type="button"
+              className="rv-sidecard-action"
+              onClick={() => actions.onShowRelated?.(table.id)}
+            >
+              <RouteIcon />
+              <span>Show related</span>
+            </button>
+          </div>
+        ) : null}
         {table.note ? <p className="rv-sidecard-note">{table.note}</p> : null}
         <ul className="rv-sidecard-cols">
           {table.columns.map((c) => (

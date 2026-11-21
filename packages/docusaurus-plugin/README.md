@@ -10,7 +10,9 @@ React Flow classes. The diagrams fit in: they follow the site's light/dark mode 
 its Infima colours and fonts. It works next to `@docusaurus/theme-mermaid`,
 `@docusaurus/theme-live-codeblock` and your own swizzled `CodeBlock`.
 
-Documentation and live gallery: <https://uncovered-songs.github.io/relvista/>
+Documentation and live gallery: <https://relvista.github.io/relvista/> ·
+[Getting started](https://relvista.github.io/relvista/docs/getting-started) ·
+[API reference](https://relvista.github.io/relvista/docs/api/)
 
 ## Install
 
@@ -18,7 +20,11 @@ Documentation and live gallery: <https://uncovered-songs.github.io/relvista/>
 npm install @relvista/docusaurus-plugin
 ```
 
-Requires Docusaurus 3.6 or later (tested with 3.10) with the classic theme, and React 18 or 19.
+Requires Docusaurus 3.6 or later with the classic theme (tested with 3.6 and 3.10), React 18 or 19
+(Docusaurus supports React 19 from 3.7) and Node 20 or later. The plugin is published as ES modules only; Docusaurus 3 loads it by name from
+`plugins`. It brings
+[`@relvista/renderer`](https://www.npmjs.com/package/@relvista/renderer) and
+[`@relvista/core`](https://www.npmjs.com/package/@relvista/core) with it.
 
 ```ts title="docusaurus.config.ts"
 export default {
@@ -29,6 +35,7 @@ export default {
       detailLevel: 'all', // 'all' | 'keys' | 'names'
       toolbar: ['view', 'zoom', 'fit', 'fullscreen', 'export', 'print', 'open-in-editor'],
       palette: 'site', // 'site': your Infima colours and fonts; 'relvista': relvista's own
+      ssr: true, // draw each diagram as a static SVG at build time (default true)
       // editorUrl: false, // hides "Open in editor" (default: the hosted relvista editor)
     },
   },
@@ -68,6 +75,7 @@ Table customers {
 | `source` | Diagram / Source tabs                                        |
 | `detail` | `all`, `keys` or `names`                                     |
 | `static` | Show the fence as highlighted DBML code instead of a diagram |
+| `ssr`    | `ssr=false` skips the build-time picture for this fence      |
 
 ## Component
 
@@ -85,7 +93,8 @@ import billing from './db/billing.dbml';
 ```
 
 Props: `value` (string or `{ files, entry }`), `src` (URL, `baseUrl` is added), `layout` (object or URL),
-`view`, `height`, `title`, `source`, `detailLevel`, `toolbar`, `editorUrl`, `palette`, `className`.
+`view`, `height`, `title`, `source`, `detailLevel`, `toolbar`, `editorUrl`, `palette`, `ssr`,
+`className`.
 
 For TypeScript, add `"@relvista/docusaurus-plugin/client"` to `compilerOptions.types` to type `.dbml`
 imports and `@theme/DbmlDiagram`.
@@ -132,7 +141,24 @@ zero specificity, so any rule of yours wins:
 | `--rv-font`, `--rv-mono`                                                    | Names and UI text; column types, code |
 
 Each one is described in the docs:
-<https://uncovered-songs.github.io/relvista/docs/colours>.
+<https://relvista.github.io/relvista/docs/colours>.
+
+## Build-time pictures (SSR)
+
+With `ssr` on (the default), `docusaurus build` lays out every diagram in Node and writes it into
+the page HTML as a static SVG, so it shows without JavaScript, in print and to crawlers. In the
+browser the interactive viewer mounts over it with the same table positions and the static layer
+is hidden once the viewer is ready; ELK never runs in the browser for these diagrams. Turn it off
+for the whole site with `themeConfig.dbml.ssr: false`, for one component with `ssr={false}`, or
+for one fence with `ssr=false`.
+
+- `src` and `layout` paths are read at build time from the site's static directories (the
+  `baseUrl` prefix is understood; `..` is refused). Remote URLs are not fetched at build time:
+  those diagrams render in the browser only.
+- A diagram that fails to build shows its error box and prints one `[relvista] <page>: …` warning;
+  the build does not fail. Markup over 1.5 MB is not inlined (the browser draws it instead).
+- The static picture is not inside `.rv-viewer`: colour overrides written on `.rv-viewer` in
+  `custom.css` do not reach it. Target `.relvista-static-box` as well to colour both.
 
 ## How it works
 
@@ -141,11 +167,14 @@ Each one is described in the docs:
   relvista does not wrap `CodeBlock`: that is where `@docusaurus/theme-live-codeblock` and sites'
   own `swizzle --wrap` wrappers hook in, and only one plugin's `@theme-init` wrapper of a component
   can be active. `@theme/DbmlDiagram` is a new component. No other theme component is swizzled.
-- During server rendering a placeholder of the final height is emitted; the viewer (React Flow,
-  `@dbml/parse`, ELK auto-layout) loads in a separate chunk only on pages that show a diagram.
+- During server rendering the static SVG (or, with `ssr` off, a placeholder of the final height)
+  is emitted; the viewer (React Flow, `@dbml/parse`, ELK auto-layout) loads in a separate chunk
+  only on pages that show a diagram.
 - A small webpack loader renames shadowing `catch` parameters in `@dbml/parse`'s bundle, working around
   a terser miscompilation that otherwise breaks `use` statements in production builds.
 
 ## Licence
 
-MIT
+MIT. The diagrams use [React Flow](https://reactflow.dev) (MIT, by xyflow), [ELK](https://eclipse.dev/elk/)
+(elkjs, EPL-2.0), [dagre](https://github.com/dagrejs/dagre) (MIT) and
+[@dbml/parse](https://github.com/holistics/dbml) (Apache-2.0).

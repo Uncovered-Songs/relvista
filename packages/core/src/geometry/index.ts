@@ -11,5 +11,12 @@ export {
   tableTitle,
   type ColumnBadge,
 } from './measure.js';
-export { layoutDiagram, layoutDiagramSync, type AutoLayoutOptions } from './layout.js';
+export {
+  layoutDiagram,
+  layoutDiagramSync,
+  needsElk,
+  AUTO_DAGRE_MAX_NODES,
+  type AutoLayoutOptions,
+} from './layout.js';
+export { collapsedGroupIds, collapsedGroupLabel, measureCollapsedGroup } from './collapse.js';
 export { disposeElkWorkers } from './elk.js';

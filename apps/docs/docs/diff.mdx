@@ -1,0 +1,140 @@
+---
+sidebar_position: 1.8
+title: Schema diff
+description: Show what changed between two versions of a DBML schema, in your docs with DbmlDiff or a dbml-diff fence, and in the editor with Compare.
+---
+
+import DbmlDiff from '@theme/DbmlDiff';
+
+export const before = `Table users {
+  id integer [pk]
+  email varchar [unique]
+  legacy_flag boolean
+}
+
+Table sessions {
+id integer [pk]
+user_id integer [ref: > users.id]
+token varchar
+}
+
+Table orders {
+id integer [pk]
+user_id integer [ref: > users.id]
+total decimal(10,2)
+}`;
+
+export const after = `Table users {
+  id integer [pk]
+  email text [unique, not null]
+  display_name varchar
+}
+
+Table orders {
+id integer [pk]
+user_id integer [ref: > users.id]
+total decimal(12,2)
+status varchar
+}
+
+Table order_items {
+order_id integer [ref: > orders.id]
+sku varchar
+quantity integer
+}`;
+
+A schema changes over time, and a review should show _how_. relvista compares two versions of a
+DBML schema table by table and column by column and draws the result as one diagram: **added**
+tables, columns and refs in green, **removed** ones in red (struck through, still where they were),
+**changed** ones in amber with a badge such as `+1 −1 ~1`. A list of every change comes with it.
+
+<DbmlDiff old={before} new={after} title="Accounts, v1 → v2" height={460} id="accounts-diff" />
+
+## The `DbmlDiff` component
+
+```mdx
+import DbmlDiff from '@theme/DbmlDiff';
+import v1 from './schema-v1.dbml';
+import v2 from './schema-v2.dbml';
+
+<DbmlDiff old={v1} new={v2} title="Accounts, v1 → v2" />
+```
+
+| Prop                                     | Type                             | Meaning                                                                  |
+| ---------------------------------------- | -------------------------------- | ------------------------------------------------------------------------ |
+| `old`, `new`                             | `string` or `{ files, entry }`   | The two versions: DBML source, or multi-file projects.                   |
+| `oldSrc`, `newSrc`                       | `string`                         | URLs of `.dbml` files served by the site, instead of `old` / `new`.      |
+| `layout`                                 | layout object or `string`        | Saved positions for the new version (a [layout file](./layout-file.md)). |
+| `view`                                   | `string`                         | A `DiagramView` of the new version.                                      |
+| `height`, `title`                        | as for `DbmlDiagram`             |                                                                          |
+| `summary`                                | `boolean`                        | The change list under the diagram. Default `true`.                       |
+| `id`                                     | `string`                         | The diff's [anchor](./exploring.mdx#deep-links) on the page.             |
+| `detailLevel`                            | `'all'` \| `'keys'` \| `'names'` | Start at another detail level.                                           |
+| `ssr`, `palette`, `toolbar`, `className` | as for `DbmlDiagram`             |                                                                          |
+
+Renamed tables are recognised when their columns are identical: `sessions` renamed to
+`user_sessions` is one changed table, not one removed and one added. Refs, indexes, checks,
+enums and their values, table groups, sticky notes, views and project settings are compared too.
+
+## The `dbml-diff` fence
+
+For a quick before/after in a page, write both versions in one fence, separated by a line of
+exactly three dashes:
+
+````md
+```dbml-diff title="Add a status to orders" id="orders-status"
+Table orders {
+  id integer [pk]
+  total decimal(10,2)
+}
+---
+Table orders {
+  id integer [pk]
+  total decimal(10,2)
+  status varchar [not null, default: 'open']
+}
+```
+````
+
+```dbml-diff title="Add a status to orders" height=300 id="orders-status"
+Table orders {
+  id integer [pk]
+  total decimal(10,2)
+}
+---
+Table orders {
+  id integer [pk]
+  total decimal(10,2)
+  status varchar [not null, default: 'open']
+}
+```
+
+The meta string takes the `DbmlDiagram` fence options (`title`, `height`, `view`, `layout`,
+`detail`, `id`, `ssr`, `static`) plus `summary=false`. Only the first `---` line splits the
+fence.
+
+## In the page's HTML
+
+Like every diagram, a diff is drawn at build time: the toned picture and the change list are in
+the HTML, so they show without JavaScript, in print and to search engines. In the browser the
+interactive viewer takes over in place, with its legend chip (`+2 −1 ~2`), search and export. A
+diff has no **Open in editor** button; open the two files in the editor and use **Compare**
+instead.
+
+## Compare in the editor
+
+In the [editor](./editor.md#compare), **Compare…** (<kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>)
+compares the open document with another version:
+
+- **File…** — pick or drop a `.dbml` file;
+- **Paste** — paste DBML text;
+- **URL** — any `https` address that allows cross-origin requests (GitHub `blob` links are
+  rewritten to the raw file);
+- **Git ref** — when the document came from GitHub, a branch, tag or commit of the same file.
+
+By default the other version is _before_ and your document _after_; the swap button turns that
+around. In compare mode the diagram shows the diff, a **Changes** panel lists every change (filter
+by added, removed or changed; click one to go to it), and the code pane becomes a side-by-side
+text diff. You can keep editing: the diff follows. Export works on the toned picture, and **Copy
+summary** copies the change list as Markdown, ready for a pull request. <kbd>Esc</kbd> or **Exit
+compare** goes back.

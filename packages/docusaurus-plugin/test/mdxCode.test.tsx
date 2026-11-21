@@ -7,13 +7,13 @@ import MDXCode from '../src/theme/MDXComponents/Code/index.js';
 afterEach(cleanup);
 
 describe('MDXComponents/Code', () => {
-  it('turns a dbml fence into a diagram with its meta', () => {
+  it('turns a dbml fence into a diagram with its meta', async () => {
     render(
       <MDXCode className="language-dbml" metastring='title="Shop" height=300 source'>
         {'Table a {\n  id int\n}\n'}
       </MDXCode>,
     );
-    const d = screen.getByTestId('diagram');
+    const d = await screen.findByTestId('diagram');
     expect(d.dataset['value']).toBe('Table a {\n  id int\n}');
     expect(d.dataset['title']).toBe('Shop');
     expect(d.dataset['height']).toBe('300');

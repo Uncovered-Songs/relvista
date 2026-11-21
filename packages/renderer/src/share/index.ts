@@ -10,3 +10,14 @@ export {
   type SharePayload,
 } from './codec.js';
 export { entrySource } from './editorLink.js';
+export {
+  DEEP_LINK_KEYS,
+  MAX_FOCUS_HOPS,
+  MAX_LINK_ZOOM,
+  MIN_LINK_ZOOM,
+  formatAnchoredTarget,
+  formatDiagramTarget,
+  parseAnchoredTarget,
+  parseDiagramTarget,
+  type DiagramTarget,
+} from './deepLink.js';

@@ -28,11 +28,13 @@ export function tableIdOf(schema: string | null | undefined, name: string): stri
   return `${idSegment(schema || DEFAULT_SCHEMA_NAME)}.${idSegment(name)}`;
 }
 
+/** One endpoint of a ref id: the table id and its column names. */
 export interface RefIdEndpoint {
   tableId: string;
   columns: string[];
 }
 
+/** A ref id split into its parts by `parseRefId`. */
 export interface ParsedRefId {
   from: RefIdEndpoint;
   relation: string;

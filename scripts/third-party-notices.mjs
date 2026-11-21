@@ -14,7 +14,7 @@ import { VENDORED, readPackageList, repoRoot, resolvePackageFrom } from './third
 
 const OUT = join(repoRoot, 'THIRD_PARTY_NOTICES.md');
 const check = process.argv.includes('--check');
-const REPO = 'https://github.com/Uncovered-Songs/relvista';
+const REPO = 'https://github.com/relvista/relvista';
 
 const BUNDLES = [
   { id: 'editor', label: 'editor', build: 'pnpm editor:build', out: 'apps/editor/dist/assets' },
@@ -237,6 +237,10 @@ const packages = [...byId.values()]
 
 // --- every `@license` banner in the shipped JavaScript names a listed package -----------------
 const SPDX_ONLY = /^(MIT|ISC|BSD|Apache|MPL|0BSD)\b/;
+// Banners whose first word is prose, not a package name: jsPDF bundles Adobe's font metrics
+// ("@license Copyright (c) 2008, Adobe …") and an RGBColor parser ("@license Use it if you like
+// it"); both are inside the jspdf package, which the notices list.
+const NOT_A_NAME = new Set(['copyright', 'use']);
 const missing = [];
 for (const b of BUNDLES) {
   const dir = join(repoRoot, b.out);
@@ -247,6 +251,7 @@ for (const b of BUNDLES) {
     for (const m of text.matchAll(/@license\s+([A-Za-z][\w.-]*)(?:\s+v?(\d+\.\d+\.\d+))?/g)) {
       const [, name, version] = m;
       if (SPDX_ONLY.test(name)) continue;
+      if (NOT_A_NAME.has(name.toLowerCase())) continue;
       const n = name.toLowerCase();
       const same = listed.filter((p) => {
         const bare = p.name.toLowerCase().replace(/^@[^/]+\//, '');

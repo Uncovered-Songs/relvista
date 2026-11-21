@@ -1,6 +1,7 @@
 import { DEFAULT_VIEW } from '@relvista/core';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import { buildShareLink, multiFileNote, shareSize, type ShareSize } from '../share/shareLink.js';
+import { positionSuffix } from '../state/navigation.js';
 import { store, useEditor } from '../state/store.js';
 import { CopyIcon, WarningIcon } from './icons.js';
 import { Modal } from './Modal.js';
@@ -12,6 +13,20 @@ export function ShareDialog(props: { onClose(): void }): ReactElement {
   const [viewPref, setIncludeView] = useState<boolean | null>(null);
   const includeLayout = layoutPref ?? ws.layout !== null;
   const includeView = viewPref ?? ws.view !== DEFAULT_VIEW;
+  const [includePosition, setIncludePosition] = useState(false);
+  // "Include position": the table and viewport of the moment the dialog opened (design phase3
+  // §6.10); the view travels in the payload's own `view=` key.
+  const [position] = useState(() => {
+    const s = store.getState();
+    return positionSuffix(
+      {
+        table: s.navTable,
+        focus: s.focus,
+        viewport: store.canvas?.getViewport() ?? s.viewport,
+      },
+      s.compile.model,
+    );
+  });
   const [link, setLink] = useState<string | null>(null);
   const [size, setSize] = useState<ShareSize | null>(null);
   const [copied, setCopied] = useState(false);
@@ -26,15 +41,16 @@ export function ShareDialog(props: { onClose(): void }): ReactElement {
       view: ws.view,
       includeLayout,
       includeView,
-    }).then((l) => {
+    }).then((built) => {
       if (cancelled) return;
+      const l = includePosition ? built + position : built;
       setLink(l);
       setSize(shareSize(l));
     });
     return () => {
       cancelled = true;
     };
-  }, [ws.layout, ws.view, includeLayout, includeView]);
+  }, [ws.layout, ws.view, includeLayout, includeView, includePosition, position]);
 
   const tooLarge = size?.level === 'too-large';
   const copy = async () => {
@@ -84,6 +100,15 @@ export function ShareDialog(props: { onClose(): void }): ReactElement {
             onChange={(e) => setIncludeView(e.target.checked)}
           />
           Open in the current view{ws.view !== DEFAULT_VIEW ? ` (${ws.view})` : ''}
+        </label>
+        <label className="ed-check">
+          <input
+            type="checkbox"
+            checked={includePosition}
+            disabled={!position}
+            onChange={(e) => setIncludePosition(e.target.checked)}
+          />
+          Include position (selected table and zoom)
         </label>
       </div>
       <div className="ed-share__row">

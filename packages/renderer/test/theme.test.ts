@@ -53,6 +53,32 @@ describe('colour helpers', () => {
     expect(contrastText({ r: 255, g: 255, b: 0 })).toBe('#1b2230');
     expect(contrastText({ r: 20, g: 40, b: 90 })).toBe('#ffffff');
   });
+  it('picks the text colour with the higher contrast on medium colours', () => {
+    // Group colours of the docs' table-groups example, and the dark-mode default group grey.
+    for (const hex of ['#79AD51', '#e67e22', '#3498DB', PALETTES.dark.groupDefault]) {
+      const bg = parseHex(hex)!;
+      const text = contrastText(bg);
+      expect(text, hex).toBe('#1b2230');
+      expect(contrastRatio(parseHex(text)!, bg), hex).toBeGreaterThanOrEqual(4.5);
+    }
+    // Whatever the colour, the chosen text is the better of the two (never under 3.9:1, the worst
+    // case at the crossover luminance).
+    for (let v = 0; v <= 255; v += 15) {
+      for (const bg of [
+        { r: v, g: v, b: v },
+        { r: v, g: 0, b: 255 - v },
+        { r: 255, g: v, b: 0 },
+      ]) {
+        const chosen = contrastRatio(parseHex(contrastText(bg))!, bg);
+        const other = contrastRatio(
+          parseHex(contrastText(bg) === '#ffffff' ? '#1b2230' : '#ffffff')!,
+          bg,
+        );
+        expect(chosen).toBeGreaterThanOrEqual(other);
+        expect(chosen).toBeGreaterThanOrEqual(3.9);
+      }
+    }
+  });
   it('rejects unsafe colour strings', () => {
     expect(safeColor('#abc')).toBe('#abc');
     expect(safeColor('red')).toBe('red');
@@ -101,5 +127,26 @@ describe('palette overrides and computed colours', () => {
     }
     // Colours that are not hex or rgb() are used as given.
     expect(groupColors('teal', '#000000')).toEqual({ fill: 'teal', stroke: 'teal', text: 'teal' });
+  });
+});
+
+describe('decoration tones', () => {
+  const keys = ['match', 'path', 'diffAdded', 'diffRemoved', 'diffChanged'] as const;
+  it.each(['light', 'dark'] as const)('reach 3:1 against the canvas and tables (%s)', (mode) => {
+    const p = PALETTES[mode];
+    for (const k of keys) {
+      const c = parseHex(p[k])!;
+      expect(
+        contrastRatio(c, parseHex(p.canvasBg)!),
+        `${mode} ${k} / canvas`,
+      ).toBeGreaterThanOrEqual(3);
+      expect(contrastRatio(c, parseHex(p.tableBg)!), `${mode} ${k} / table`).toBeGreaterThanOrEqual(
+        3,
+      );
+    }
+  });
+  it('are CSS variables in both palettes', () => {
+    for (const k of keys) expect(css.match(new RegExp(`${cssVarName(k)}:`, 'g'))).toHaveLength(2);
+    expect(cssVarName('diffRemoved')).toBe('--rv-diff-removed');
   });
 });

@@ -15,8 +15,20 @@ test('pinned tables keep their place when auto-layout runs', async ({ page }) =>
 
   // Move two tables so auto-layout has something to change, pin one of them.
   for (const id of ['public.users', 'public.orders']) {
+    const node = page.locator(`.react-flow__node[data-id="${id}"]`);
+    // Wait until the initial fit has settled: a drag that starts mid-animation is lost under load.
+    let last = '';
+    await expect
+      .poll(async () => {
+        const b = await node.boundingBox();
+        const now = b ? `${Math.round(b.x)},${Math.round(b.y)}` : '';
+        const stable = now !== '' && now === last;
+        last = now;
+        return stable;
+      })
+      .toBe(true);
     const before = await pos(page, id);
-    const box = (await page.locator(`.react-flow__node[data-id="${id}"]`).boundingBox())!;
+    const box = (await node.boundingBox())!;
     // Drag towards the middle of the window: a pointer released off-screen never ends the drag.
     const vp = page.viewportSize()!;
     const dx = box.x + 30 < vp.width / 2 ? 60 : -60;

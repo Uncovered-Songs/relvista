@@ -1,6 +1,7 @@
 import type { DiagramGeometry, DiagramModel } from '@relvista/core';
 import { renderDiagramSvgString, type SvgExportOptions } from './svgString.js';
 
+/** Options of `exportPng`. */
 export interface PngExportOptions extends Omit<SvgExportOptions, 'scale'> {
   /** Device pixels per diagram px. Default 2. */
   scale?: number;

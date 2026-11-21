@@ -254,6 +254,7 @@ export function renameNode(layout: Layout, oldId: NodeId, newId: NodeId): Layout
   });
 }
 
+/** What `pruneLayout` returns: the pruned layout and what it removed. */
 export interface PruneResult {
   layout: Layout;
   /** Node ids removed from at least one view, sorted. */

@@ -27,7 +27,11 @@ function accents(mode: 'light' | 'dark', family: string[], canvas: string) {
 
 describe('site palette', () => {
   it('maps every diagram and UI variable to the site, with zero specificity', () => {
-    expect(css).toMatch(/:where\(\.rv-viewer\.rv-palette-site\)\s*\{/);
+    // The viewer, and the static (build-time) picture: its box and its SVG, which declares the
+    // renderer's light palette itself.
+    expect(css).toMatch(
+      /:where\(\s*\.rv-viewer\.rv-palette-site,\s*\.relvista-static-box\.rv-palette-site,\s*\.relvista-static-box\.rv-palette-site > svg\.rv-diagram\s*\)\s*\{/,
+    );
     for (const v of ['--rv-canvas-bg', '--rv-header-bg', '--rv-ref-highlight', '--rv-ui-text'])
       expect(css).toContain(`${v}:`);
     expect(css).toContain('--rv-font: var(--ifm-font-family-base)');

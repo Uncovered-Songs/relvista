@@ -117,6 +117,35 @@ function saveAsItem(): MenuItem {
   };
 }
 
+function compareItem(): MenuItem {
+  const s = store.getState();
+  return {
+    id: 'm-compare',
+    label: s.compare ? 'Compare with another version…' : 'Compare…',
+    shortcut: mod('D', { alt: true }),
+    disabled: !s.compile.model,
+    onSelect: () => store.openDialog({ kind: 'compare' }),
+  };
+}
+
+/** Compare… (Mod+Alt+D): the top bar button of wide windows; pressed while comparing. */
+function CompareButton(): ReactElement {
+  const comparing = useEditor((s) => !!s.compare);
+  const hasModel = useEditor((s) => !!s.compile.model);
+  return (
+    <button
+      type="button"
+      className="ed-btn"
+      disabled={!hasModel}
+      aria-pressed={comparing}
+      onClick={() => store.openDialog({ kind: 'compare' })}
+      title={`Compare with another version (${mod('D', { alt: true })})`}
+    >
+      <span className="ed-btn__text">Compare</span>
+    </button>
+  );
+}
+
 function viewMenuItem(): MenuItem[] {
   const views = viewItems();
   return views.length ? [{ id: 'm-view', label: 'View', submenu: views }] : [];
@@ -127,6 +156,7 @@ function compactItems(): MenuItem[] {
   return [
     saveAsItem(),
     { id: 'm-layout', label: 'Auto-layout', submenu: autoLayoutItems() },
+    compareItem(),
     ...viewMenuItem(),
   ];
 }
@@ -139,6 +169,7 @@ function overflowItems(choice: ThemeChoice): MenuItem[] {
     saveAsItem(),
     { id: 'm-export', label: 'Export', submenu: exportMenuItems() },
     { id: 'm-layout', label: 'Auto-layout', submenu: autoLayoutItems() },
+    compareItem(),
     ...viewMenuItem(),
   ];
   items.push(
@@ -245,13 +276,14 @@ export function TopBar(): ReactElement {
             <ShareButton iconOnly={compact} />
             <ExportMenu />
             {!compact && <AutoLayoutMenu />}
+            {!compact && <CompareButton />}
           </nav>
           <div className="ed-topbar__end">
             {compact ? (
               <MenuButton
                 label={<MoreIcon />}
                 ariaLabel="More actions"
-                title="Save as, Auto-layout, View"
+                title="Save as, Auto-layout, Compare, View"
                 className="ed-iconbtn"
                 chevron={false}
                 align="right"

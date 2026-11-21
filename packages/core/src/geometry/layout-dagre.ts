@@ -65,7 +65,7 @@ function dagreLoose(g: LayoutGraph, direction: Direction, gap: number): Placemen
 }
 
 /** dagre on one connected component, groups laid out in two levels. */
-function dagreComponent(g: LayoutGraph, direction: Direction): Placement {
+export function dagreComponent(g: LayoutGraph, direction: Direction): Placement {
   if (!g.groups.length) return dagreFlat(g, direction);
   const pad = METRICS.groupPadding;
   const head = METRICS.groupHeaderHeight;

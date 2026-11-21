@@ -2,9 +2,11 @@ import { METRICS, type DetailLevel, type DiagramGeometry, type DiagramModel } fr
 import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { DiagramSvg } from '../svg/DiagramSvg.js';
+import type { Decorations } from '../svg/decorations.js';
 import type { EdgeStyle } from '../svg/routing.js';
 import { paletteCss, type ColorMode, type PaletteOverrides } from '../theme.js';
 
+/** Options of `renderDiagramSvgString`. */
 export interface SvgExportOptions {
   colorMode?: ColorMode;
   /**
@@ -23,6 +25,8 @@ export interface SvgExportOptions {
   highlight?: readonly string[];
   /** Scale of the `width`/`height` attributes (the viewBox is unchanged). Default 1. */
   scale?: number;
+  /** Search, path and diff tones, drawn into the file too (a diff can be exported). */
+  decorations?: Decorations | null;
 }
 
 /** The `<style>` embedded in exported SVGs: palette variables for the mode and the font stacks. */
@@ -45,6 +49,17 @@ function escapeXmlText(s: string): string {
  * The diagram as a standalone SVG document: literal colours for the chosen mode (works in tools
  * without CSS variable support), plus an embedded `<style>` with the `--rv-*` variables and fonts.
  * Pure: works in Node and in browsers.
+ *
+ * @example
+ * ```ts
+ * import { writeFileSync } from 'node:fs';
+ * import { compileDbml, layoutDiagram } from '@relvista/core';
+ * import { renderDiagramSvgString } from '@relvista/renderer';
+ *
+ * const { model } = compileDbml(source);
+ * const geometry = await layoutDiagram(model!);
+ * writeFileSync('schema.svg', renderDiagramSvgString(model!, geometry, { colorMode: 'dark' }));
+ * ```
  */
 export function renderDiagramSvgString(
   model: DiagramModel,
@@ -68,6 +83,7 @@ export function renderDiagramSvgString(
       ...(opts.detailLevel ? { detailLevel: opts.detailLevel } : {}),
       ...(opts.edgeStyle ? { edgeStyle: opts.edgeStyle } : {}),
       ...(opts.highlight ? { highlight: opts.highlight } : {}),
+      ...(opts.decorations ? { decorations: opts.decorations } : {}),
       width: Math.round(w * scale * 100) / 100,
       height: Math.round(h * scale * 100) / 100,
       literalColors: true,

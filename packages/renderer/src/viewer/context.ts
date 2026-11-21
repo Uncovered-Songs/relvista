@@ -1,6 +1,18 @@
 import type { DetailLevel } from '@relvista/core';
 import { createContext, useContext } from 'react';
+import type { Decorations } from '../svg/decorations.js';
 import type { HighlightSets, HSide } from '../svg/routing.js';
+
+/** A node's box at the end of a resize with the handles (diagram units). */
+export interface ResizeBox {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Resize handles: which node kinds get them (editable canvas only; read-only: none). */
+export type ResizeKinds = 'notes' | 'all' | false;
 
 export interface ViewerState {
   detailLevel: DetailLevel;
@@ -10,14 +22,23 @@ export interface ViewerState {
   hoveredId: string | null;
   /** Table whose details card is open. */
   selectedId: string | null;
-  /** `highlightedNodeId` of the canvas (ring + lit refs). */
-  highlightedId: string | null;
+  /** Nodes with the highlight ring: `highlightedNodeId` and `highlightIds` of the canvas. */
+  highlighted: ReadonlySet<string>;
+  /** Search hits, paths, diff tones (docs/design/phase3-v1.md §4.2). */
+  decorations: Decorations | null;
   /** Nodes selected in the editable canvas. */
   selection: ReadonlySet<string>;
   /** Groups get a header band that can be clicked (and, editable, dragged). */
   groupHandles: boolean;
   /** Table id → handle ids its refs attach to (only those handles are rendered). */
   handles: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Node kinds drawn with resize handles. */
+  resizable: ResizeKinds;
+  /** Resize gestures of a node (the canvas commits one 'resize' at the end). */
+  onResizeStart?: (id: string) => void;
+  onResizeEnd?: (id: string, box: ResizeBox) => void;
+  /** Ref lines take pointer events (the canvas has edge click / context-menu handlers). */
+  edgeEvents: boolean;
 }
 
 export const ViewerContext = createContext<ViewerState>({
@@ -26,10 +47,13 @@ export const ViewerContext = createContext<ViewerState>({
   dim: true,
   hoveredId: null,
   selectedId: null,
-  highlightedId: null,
+  highlighted: new Set(),
+  decorations: null,
   selection: new Set(),
   groupHandles: false,
   handles: new Map(),
+  resizable: false,
+  edgeEvents: false,
 });
 
 export function useViewerState(): ViewerState {

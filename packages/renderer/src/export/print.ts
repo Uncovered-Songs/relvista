@@ -1,6 +1,7 @@
 import type { DiagramGeometry, DiagramModel } from '@relvista/core';
 import { renderDiagramSvgString, type SvgExportOptions } from './svgString.js';
 
+/** Options of `printDiagram`. */
 export interface PrintOptions extends Omit<SvgExportOptions, 'scale' | 'colorMode'> {
   /** Page orientation. Default 'landscape'; 'auto' picks from the diagram's aspect ratio. */
   orientation?: 'landscape' | 'portrait' | 'auto';

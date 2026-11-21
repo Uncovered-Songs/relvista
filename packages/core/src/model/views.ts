@@ -15,6 +15,7 @@ import type {
   TableGroup,
 } from './types.js';
 
+/** @internal Input of `resolveView` (compile.ts); not part of the package API. */
 export interface ViewContext {
   tables: Table[];
   groups: TableGroup[];
@@ -27,7 +28,7 @@ export interface ViewContext {
   tableEntries?: ViewTableEntry[] | undefined;
 }
 
-/** A `Tables { ... }` entry of a DiagramView as written in the source. */
+/** @internal A `Tables { ... }` entry of a DiagramView as written in the source. */
 export interface ViewTableEntry {
   schema: string | null;
   name: string;
@@ -40,6 +41,8 @@ export interface ViewTableEntry {
  * as `use { table users as busers }` comes back as `users`, which is ambiguous when the entry file
  * also declares a `users` table. The written name (`busers`) is not. Returns `undefined` when the
  * block cannot be found or an entry is not a plain (optionally schema-qualified) name.
+ *
+ * @internal Takes `@dbml/parse` types; kept out of the published declarations (`stripInternal`).
  */
 export function viewTableEntries(
   compiler: Compiler,
@@ -80,6 +83,8 @@ export function viewTableEntries(
  * tables are the union of the listed tables, the members of the listed groups and the tables of
  * the listed schemas. When none has items and at least one is `[]` (`*`, `Tables { * }`,
  * `Schemas { * }`), every table is visible; when all are `null`, none is.
+ *
+ * @internal Takes `@dbml/parse` types; kept out of the published declarations (`stripInternal`).
  */
 export function resolveView(
   view: ParserDiagramView,

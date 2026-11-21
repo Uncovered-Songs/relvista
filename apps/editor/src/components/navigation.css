@@ -1,0 +1,403 @@
+/* Editor navigation and compare (docs/design/phase3-v1.md §6.8–§6.12): search panel placement,
+   detail switch, focus chip and diff legend, Changes panel, code diff pane, Compare and PDF
+   dialogs. Colours come from the editor tokens (--ed-*) and the renderer palette (--rv-*). */
+
+/* --- diagram overlays -------------------------------------------------------------------- */
+
+/* Search panel: top centre of the diagram; the whole width on phones. */
+.ed-diagram .ed-nav-search {
+  position: absolute;
+  top: 54px;
+  left: 50%;
+  z-index: 8;
+  width: min(420px, calc(100% - 20px));
+  transform: translateX(-50%);
+}
+
+@media (max-width: 767px) {
+  .ed-diagram .ed-nav-search {
+    top: 10px;
+    left: 10px;
+    right: 10px;
+    z-index: 10;
+    width: auto;
+    transform: none;
+  }
+}
+
+.ed-overlay--bl {
+  bottom: 10px;
+  left: 10px;
+}
+
+.ed-nav-detail {
+  padding: 2px;
+}
+
+/* Focus chip and diff legend: top left. */
+.ed-nav-chips {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 300px);
+  pointer-events: none;
+}
+
+.ed-nav-chips > * {
+  pointer-events: auto;
+}
+
+@media (max-width: 767px) {
+  /* Below the diagram toolbar, whose buttons are 44 px touch targets here. */
+  .ed-nav-chips {
+    top: 68px;
+    max-width: calc(100% - 20px);
+  }
+}
+
+/* --- Changes panel ----------------------------------------------------------------------- */
+
+.ed-diagram .ed-changes {
+  position: absolute;
+  top: 54px;
+  right: 10px;
+  bottom: 10px;
+  z-index: 7;
+  display: flex;
+  flex-direction: column;
+  width: min(320px, calc(100% - 20px));
+  max-height: calc(100% - 64px);
+  border: 1px solid var(--ed-border);
+  border-radius: var(--ed-radius-lg);
+  background: var(--ed-surface);
+  color: var(--ed-text);
+  box-shadow: var(--ed-shadow);
+  font-size: 13px;
+}
+
+.ed-diagram .ed-changes[data-open='false'] {
+  bottom: auto;
+}
+
+@media (max-width: 767px) {
+  /* A bottom sheet, open or hidden: above the detail switch (44 px touch targets), never over the
+     diagram toolbar or the legend at the top. */
+  .ed-diagram .ed-changes,
+  .ed-diagram .ed-changes[data-open='false'] {
+    top: auto;
+    left: 10px;
+    bottom: 72px;
+    width: auto;
+    max-height: 45%;
+  }
+}
+
+.ed-changes__head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 8px 0 12px;
+}
+
+.ed-changes__title {
+  flex: 1;
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ed-changes__summary {
+  margin: 2px 12px 8px;
+  color: var(--ed-muted);
+  font-size: 12.5px;
+}
+
+.ed-changes__body {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  flex: 1;
+  border-top: 1px solid var(--ed-border);
+}
+
+.ed-changes__body[hidden] {
+  display: none;
+}
+
+.ed-changes__sides {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+}
+
+.ed-changes__side {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-changes__filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 0 12px 8px;
+}
+
+.ed-changes__filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: 1px solid var(--ed-border);
+  border-radius: 999px;
+  background: var(--ed-surface);
+  color: var(--ed-text);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.ed-changes__filter[aria-pressed='true'] {
+  border-color: var(--ed-accent);
+  background: var(--ed-accent-soft);
+  color: var(--ed-text);
+  font-weight: 600;
+  box-shadow: inset 0 0 0 1px var(--ed-accent);
+}
+
+.ed-changes__filter:hover {
+  background: var(--ed-hover);
+}
+
+.ed-changes__filter:focus-visible,
+.ed-changes__item:focus-visible {
+  outline: 2px solid var(--ed-focus);
+  outline-offset: 1px;
+}
+
+.ed-changes__groups {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 0 4px 8px;
+}
+
+.ed-changes__group + .ed-changes__group {
+  margin-top: 6px;
+}
+
+.ed-changes__h {
+  margin: 6px 8px 2px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--ed-muted);
+}
+
+.ed-changes__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.ed-changes__item {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--ed-radius);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+button.ed-changes__item {
+  cursor: pointer;
+}
+
+button.ed-changes__item:hover {
+  background: var(--ed-hover);
+}
+
+.ed-changes__sign {
+  flex: none;
+  width: 1em;
+  font-family: var(--ed-mono);
+  font-weight: 700;
+  text-align: center;
+}
+
+.ed-changes__sign[data-rv-tone='added'],
+.ed-changes__filter[data-rv-tone='added'] > span {
+  color: var(--ed-success);
+}
+
+.ed-changes__sign[data-rv-tone='removed'],
+.ed-changes__filter[data-rv-tone='removed'] > span {
+  color: var(--ed-danger);
+}
+
+.ed-changes__sign[data-rv-tone='changed'],
+.ed-changes__filter[data-rv-tone='changed'] > span {
+  color: var(--ed-warning);
+}
+
+.ed-changes__label {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-family: var(--ed-mono);
+  font-size: 12px;
+}
+
+.ed-changes__detail {
+  display: block;
+  font-family: var(--ed-font);
+  color: var(--ed-muted);
+  font-size: 11.5px;
+}
+
+.ed-changes__empty {
+  margin: 8px 12px;
+}
+
+.ed-changes__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--ed-border);
+}
+
+.ed-changes__actions .ed-btn svg {
+  margin-right: 4px;
+}
+
+/* --- code diff pane ---------------------------------------------------------------------- */
+
+.ed-code__editor--hidden > .ed-monaco {
+  visibility: hidden;
+}
+
+.ed-codediff {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  flex-direction: column;
+  background: var(--ed-surface);
+}
+
+.ed-codediff__bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-bottom: 1px solid var(--ed-border);
+  font-size: 12px;
+}
+
+.ed-codediff__sides {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-codediff__editor {
+  flex: 1;
+  min-height: 0;
+}
+
+/* --- Compare dialog ---------------------------------------------------------------------- */
+
+.ed-compare__sources {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin: 12px 0 4px;
+  padding: 0;
+  border: 0;
+}
+
+.ed-compare__sources legend {
+  width: 100%;
+  margin-bottom: 6px;
+  padding: 0;
+}
+
+.ed-compare__source {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.ed-compare__source input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: var(--ed-accent);
+}
+
+.ed-compare__text {
+  min-height: 180px;
+  font-family: var(--ed-mono);
+  font-size: 12.5px;
+  resize: vertical;
+}
+
+.ed-compare__drop {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0;
+  padding: 18px 14px;
+  border: 1.5px dashed var(--ed-border-strong);
+  border-radius: var(--ed-radius-lg);
+}
+
+.ed-compare__drop[data-over='true'] {
+  border-color: var(--ed-accent);
+  background: var(--ed-accent-soft);
+}
+
+.ed-compare__swap {
+  margin-top: 8px;
+}
+
+.ed-compare__error {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 12px 0 0;
+  color: var(--ed-danger);
+}
+
+.ed-compare__exit {
+  margin-right: auto;
+}
+
+/* --- PDF dialog layer -------------------------------------------------------------------- */
+
+/* The renderer's dialog fills its container: here, the window. Above the toasts (z-index 100):
+   a modal dialog is never covered by them. */
+.ed-pdf-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+}

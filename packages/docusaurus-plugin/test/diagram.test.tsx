@@ -1,16 +1,30 @@
 // @vitest-environment jsdom
 // DbmlDiagram in a browser-like environment: loading, fetch errors, invalid layout files, the
-// error boundary and the Source tab. Docusaurus modules are replaced by minimal stand-ins.
+// error boundary, the Source tab and the build-time positions (`ssrLayout`). Docusaurus modules
+// are replaced by minimal stand-ins.
+import { PassThrough } from 'node:stream';
+import { text } from 'node:stream/consumers';
 import { act, cleanup, render, screen } from '@testing-library/react';
+import type { ReactNode } from 'react';
+import { hydrateRoot } from 'react-dom/client';
+import { renderToPipeableStream } from 'react-dom/server';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { compileDbml, mergeViewDefaults, type Layout } from '@relvista/core';
 import { sourceText } from '../src/source.js';
 
 const viewerProps: Array<Record<string, unknown>> = [];
 let viewerThrows = false;
-vi.mock('@relvista/renderer', () => ({
+vi.mock('@relvista/renderer', async () => ({
+  // Deep links (the docs anchors).
+  ...(await vi.importActual<Record<string, unknown>>('../../renderer/src/share/deepLink.ts')),
   // Colour helpers of the site palette: jsdom has no CSS colours, so nothing resolves.
   resolveColors: (_el: unknown, values: string[]) => values.map(() => null),
   parseHex: () => null,
+  // The static layer after a client-side navigation (ssr/build.tsx) and its frame (ssr/frames.ts).
+  DiagramSvg: () => <svg className="rv-diagram" />,
+  viewerFirstView: (
+    await vi.importActual<Record<string, unknown>>('../../renderer/src/canvas/frame.ts')
+  )['viewerFirstView'],
   DbmlViewer: (p: Record<string, unknown>) => {
     viewerProps.push(p);
     if (viewerThrows) throw new Error('boom');
@@ -63,9 +77,7 @@ describe('DbmlDiagram', () => {
   it('links "Open in editor" to the hosted editor by default; editorUrl={false} hides it', async () => {
     render(<DbmlDiagram value={'Table a {\n  id int\n}'} />);
     await settle();
-    expect(viewerProps.at(-1)!['editorUrl']).toBe(
-      'https://uncovered-songs.github.io/relvista/editor/',
-    );
+    expect(viewerProps.at(-1)!['editorUrl']).toBe('https://relvista.github.io/relvista/editor/');
     expect(viewerProps.at(-1)!['toolbar']).toContain('open-in-editor');
     cleanup();
     render(<DbmlDiagram value={'Table a {\n  id int\n}'} editorUrl={false} />);
@@ -121,6 +133,72 @@ describe('DbmlDiagram', () => {
     expect(screen.getByTestId('code').textContent).toBe(
       '// main.dbml\nuse * from ./b\n\n// b.dbml\nTable b {}\n',
     );
+  });
+});
+
+/** The server render, as Docusaurus does it (no `document` on the server). */
+async function serverHtml(app: ReactNode): Promise<string> {
+  vi.stubGlobal('document', undefined);
+  try {
+    return await new Promise<string>((resolve, reject) => {
+      const pass = new PassThrough();
+      const { pipe } = renderToPipeableStream(app, {
+        onError: reject,
+        onAllReady() {
+          pipe(pass);
+          text(pass).then(resolve, reject);
+        },
+      });
+    });
+  } finally {
+    vi.unstubAllGlobals();
+  }
+}
+
+describe('build-time positions (ssrLayout)', () => {
+  const SOURCE =
+    'Table users {\n  id int [pk]\n}\n\nTable posts {\n  user_id int [ref: > users.id]\n}';
+
+  async function hydrated(app: ReactNode): Promise<Record<string, unknown>> {
+    const container = document.createElement('div');
+    container.innerHTML = await serverHtml(app);
+    document.body.appendChild(container);
+    await act(async () => {
+      hydrateRoot(container, app);
+    });
+    await settle();
+    container.remove();
+    return viewerProps.at(-1)!;
+  }
+
+  it('go to the viewer as ssrLayout, never into layout (so never into "Open in editor")', async () => {
+    const props = await hydrated(<DbmlDiagram value={SOURCE} title="Blog" />);
+    expect(props['layout']).toBeNull();
+    const nodes = mergeViewDefaults(props['ssrLayout'] as Layout, '*').nodes;
+    for (const t of compileDbml(SOURCE).model!.tables) {
+      expect(Number.isFinite(nodes[t.id]?.x) && Number.isFinite(nodes[t.id]?.y)).toBe(true);
+    }
+  });
+
+  it('a layout file object goes to the viewer unchanged, the rest in ssrLayout', async () => {
+    const saved: Layout = {
+      version: 1,
+      views: { '*': { nodes: { 'public.users': { x: 600, y: 300, w: 260 } } } },
+      settings: { detailLevel: 'keys' },
+    };
+    const props = await hydrated(<DbmlDiagram value={SOURCE} layout={saved} />);
+    expect(props['layout']).toEqual(saved);
+    const ssr = props['ssrLayout'] as Layout;
+    expect(ssr.views['*']!.nodes['public.posts']).toBeDefined();
+    // The saved position is the one drawn at build time, too.
+    expect(ssr.views['*']!.nodes['public.users']).toMatchObject({ x: 600, y: 300 });
+  });
+
+  it('a client-side navigation (no server markup) gives no ssrLayout', async () => {
+    render(<DbmlDiagram value={SOURCE} />);
+    await settle();
+    expect(viewerProps.at(-1)!['ssrLayout']).toBeNull();
+    expect(viewerProps.at(-1)!['layout']).toBeNull();
   });
 });
 

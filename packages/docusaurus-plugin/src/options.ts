@@ -35,10 +35,15 @@ export const ThemeConfigSchema = Joi.object<ThemeConfig>({
     palette: Joi.string()
       .valid(...PALETTE_OPTIONS)
       .default(DEFAULT_THEME_CONFIG.dbml.palette),
+    ssr: Joi.boolean().default(DEFAULT_THEME_CONFIG.dbml.ssr),
   }).default(DEFAULT_THEME_CONFIG.dbml),
 });
 
-/** Validates `themeConfig.dbml` and fills in defaults. Called by Docusaurus at startup. */
+/**
+ * Validates `themeConfig.dbml` and fills in defaults. Called by Docusaurus at startup.
+ *
+ * @param context - What Docusaurus passes: the raw `themeConfig` and its `validate` helper.
+ */
 export function validateThemeConfig({
   validate,
   themeConfig,

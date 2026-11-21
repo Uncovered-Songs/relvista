@@ -1,0 +1,9 @@
+Table customers {
+  id integer [pk]
+  email varchar
+}
+
+Table orders {
+  id integer [pk]
+  customer_id integer [ref: > customers.id]
+}

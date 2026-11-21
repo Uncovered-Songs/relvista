@@ -2,7 +2,7 @@
 
 The editor website: Monaco DBML editing with a live, editable ER diagram, file-based saving
 (File System Access API with a download fallback), share links and exports. Static Vite SPA,
-deployed at <https://uncovered-songs.github.io/relvista/editor/> inside the docs Pages artifact.
+deployed at <https://relvista.github.io/relvista/editor/> inside the docs Pages artifact.
 
 Design and contracts: [`docs/design/phase2-editor.md`](../../docs/design/phase2-editor.md),
 decision [0004](../../docs/decisions/0004-editor.md).

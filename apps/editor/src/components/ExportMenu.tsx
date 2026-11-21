@@ -6,9 +6,10 @@ import { MenuButton, type MenuItem } from './Menu.js';
 export function exportMenuItems(): MenuItem[] {
   const s = store.getState();
   const noDiagram = !s.compile.model;
-  const multi = s.ws.files.length > 1;
-  const sqlBlocked = multi
-    ? 'SQL export works on single-file documents'
+  // In compare mode SVG, PNG, PDF and print show the decorated picture (the canvas draws it).
+  // Several files export too: the SQL is generated from the whole model (design phase3 §6.3).
+  const sqlBlocked = !s.compile.model
+    ? 'There is no schema to export yet'
     : s.compile.stale
       ? 'Fix the errors first'
       : undefined;
@@ -26,8 +27,15 @@ export function exportMenuItems(): MenuItem[] {
       onSelect: () => void store.exportAs('png'),
     },
     {
+      id: 'pdf',
+      label: 'PDF…',
+      hint: s.compare ? 'With the compare colours' : 'Tiled pages or one page per view',
+      disabled: noDiagram,
+      onSelect: () => store.openDialog({ kind: 'pdf' }),
+    },
+    {
       id: 'print',
-      label: 'Print / PDF…',
+      label: 'Print…',
       disabled: noDiagram,
       onSelect: () => void store.exportAs('print'),
     },

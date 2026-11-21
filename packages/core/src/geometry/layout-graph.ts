@@ -6,6 +6,7 @@ import type { DetailLevel, NodeLayout } from '../layout/types.js';
 import type { DiagramModel, Ref } from '../model/types.js';
 import { METRICS, estimateTextWidth } from './metrics.js';
 import { measureNote, measureTable, visibleColumns } from './measure.js';
+import { measureCollapsedGroup } from './collapse.js';
 import type { Box, TextMeasure } from './types.js';
 
 /** Port row for the table header (a ref whose column is hidden at the current detail level). */
@@ -22,6 +23,11 @@ export interface LayoutNode {
   groupId: string | null;
   /** Set when the node was measured at another level than the layout's (saved `collapsed`). */
   detailLevel?: DetailLevel;
+  /**
+   * The node is a collapsed TableGroup (`id` is `group:<name>`): it is drawn as the group's box
+   * and goes into `geometry.groups`, not `geometry.nodes`.
+   */
+  collapsedGroup?: true;
 }
 
 export interface LayoutEdge {
@@ -56,6 +62,8 @@ export interface PrepareOptions {
   detailLevel: DetailLevel;
   measure: TextMeasure;
   saved: Record<string, Partial<NodeLayout>>;
+  /** Ids of collapsed groups (`collapsedGroupIds`): each becomes one node, members are left out. */
+  collapsed?: ReadonlySet<string>;
 }
 
 /** Y of a ref attachment point, relative to the table's top edge, clamped into the node. */
@@ -79,8 +87,34 @@ export function prepareGraph(model: DiagramModel, opts: PrepareOptions): LayoutG
   const rowsByTable = new Map<string, string[]>();
 
   const groupIds = new Set(model.groups.map((g) => g.id));
+  const collapsed = opts.collapsed ?? new Set<string>();
+  /** Table id → id of the node its refs attach to (the collapsed group, or itself). */
+  const displayOf = new Map<string, string>();
   for (const table of model.tables) {
-    if (nodeById.has(table.id)) continue;
+    if (nodeById.has(table.id) || displayOf.has(table.id)) continue;
+    if (table.groupId && collapsed.has(table.groupId) && groupIds.has(table.groupId)) {
+      // Members of a collapsed group: the group's node takes the place of its first member.
+      displayOf.set(table.id, table.groupId);
+      rowsByTable.set(table.id, []);
+      if (nodeById.has(table.groupId)) continue;
+      const group = model.groups.find((g) => g.id === table.groupId)!;
+      const count = model.tables.filter((t) => t.groupId === group.id).length;
+      const saved = opts.saved[group.id];
+      const size = measureCollapsedGroup(group, count, measure);
+      const node: LayoutNode = {
+        id: group.id,
+        kind: 'table',
+        index: nodes.length,
+        width: positive(saved?.w) ? saved.w : size.width,
+        height: positive(saved?.h) ? saved.h : size.height,
+        groupId: null,
+        collapsedGroup: true,
+      };
+      nodes.push(node);
+      nodeById.set(node.id, node);
+      continue;
+    }
+    displayOf.set(table.id, table.id);
     const saved = opts.saved[table.id];
     const level: DetailLevel = saved?.collapsed ? 'names' : opts.detailLevel;
     const size = measureTable(table, level, measure);
@@ -103,13 +137,13 @@ export function prepareGraph(model: DiagramModel, opts: PrepareOptions): LayoutG
   for (const note of model.stickyNotes) {
     if (nodeById.has(note.id)) continue;
     const saved = opts.saved[note.id];
-    const size = measureNote(note, measure);
+    const size = measureNote(note, measure, saved);
     const node: LayoutNode = {
       id: note.id,
       kind: 'note',
       index: nodes.length,
-      width: positive(saved?.w) ? saved.w : size.width,
-      height: positive(saved?.h) ? saved.h : size.height,
+      width: size.width,
+      height: size.height,
       groupId: null,
     };
     nodes.push(node);
@@ -134,11 +168,16 @@ export function prepareGraph(model: DiagramModel, opts: PrepareOptions): LayoutG
     if (!rowsByTable.has(ref.from.tableId) || !rowsByTable.has(ref.to.tableId)) continue;
     seen.add(ref.id);
     const [parent, child] = orient(ref);
+    const source = displayOf.get(parent.tableId)!;
+    const target = displayOf.get(child.tableId)!;
+    // Both ends inside the same collapsed group: nothing to draw.
+    if (source === target && collapsed.has(source)) continue;
     edges.push({
       id: ref.id,
       index: edges.length,
-      source: parent.tableId,
-      target: child.tableId,
+      source,
+      target,
+      // A collapsed group's rows list is empty, so its end attaches to the header.
       sourceRow: rowOf(parent.tableId, parent.columns),
       targetRow: rowOf(child.tableId, child.columns),
       reversed: ref.fkSide === 'from',

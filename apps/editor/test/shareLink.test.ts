@@ -1,5 +1,11 @@
 import { emptyLayout, type Layout } from '@relvista/core';
-import { createEditorLink, encodeShareHash } from '@relvista/renderer';
+import {
+  createEditorLink,
+  decodeShareHash,
+  encodeShareHash,
+  parseDiagramTarget,
+} from '@relvista/renderer';
+import { positionSuffix } from '../src/state/navigation.js';
 import { describe, expect, it } from 'vitest';
 import {
   LONG_LINK_CHARS,
@@ -129,5 +135,40 @@ describe('size thresholds and notes', () => {
     expect(sharedName('Shop')).toBe('Shop.dbml');
     expect(sharedName('a/b')).toBe('a-b.dbml');
     expect(sharedName(null)).toBe('shared.dbml');
+  });
+});
+
+describe('share link with "Include position"', () => {
+  it('appends table and viewport keys that the share decoder ignores and the editor reads', async () => {
+    const { compileDbml } = await import('@relvista/core');
+    const dbml = 'Table users {\n  id int\n}\nTable orders {\n  id int\n}\n';
+    const model = compileDbml(dbml).model!;
+    const base = await buildShareLink(
+      { dbml, layout: layout(), view: 'v', includeLayout: true, includeView: true },
+      'https://x.test/relvista/editor/',
+    );
+    const suffix = positionSuffix(
+      {
+        table: 'public.orders',
+        focus: { id: 'public.orders', hops: 2 },
+        viewport: { x: -10, y: 20.5, zoom: 0.5 },
+      },
+      model,
+    );
+    expect(suffix).toBe('&table=orders&hops=2&vp=-10,20.5,0.5');
+    const link = base + suffix;
+    const hash = new URL(link).hash;
+    // Phase-2 decoding is unchanged by the extra keys.
+    const decoded = await decodeShareHash(hash);
+    expect(decoded?.dbml).toBe(dbml);
+    expect(decoded?.view).toBe('v');
+    expect((await readShareHash(hash)).kind).toBe('share');
+    // The deep-link codec reads view (from the payload's own key), table, hops and vp.
+    expect(parseDiagramTarget(hash)).toEqual({
+      view: 'v',
+      table: 'orders',
+      hops: 2,
+      viewport: { x: -10, y: 20.5, zoom: 0.5 },
+    });
   });
 });

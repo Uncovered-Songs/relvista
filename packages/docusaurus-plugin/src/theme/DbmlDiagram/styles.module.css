@@ -77,3 +77,8 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* `#<anchor>` links land below the sticky navbar, as headings do. */
+.wrapper {
+  scroll-margin-top: calc(var(--ifm-navbar-height, 3.75rem) + 0.5rem);
+}

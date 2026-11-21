@@ -1,7 +1,11 @@
 import {
   DEFAULT_VIEW,
+  measureCollapsedGroup,
   mergeViewDefaults,
+  neighborhood,
   selectView,
+  subsetModel,
+  tableTitle,
   type Box,
   type DetailLevel,
   type DiagramGeometry,
@@ -21,11 +25,13 @@ import {
   ReactFlowProvider,
   useReactFlow,
   useViewportStore,
+  type EdgeMouseHandler,
   type NodeMouseHandler,
   type OnNodeDrag,
   type OnNodesChange,
 } from '@xyflow/react';
 import {
+  forwardRef,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -35,18 +41,52 @@ import {
   useState,
   type CSSProperties,
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
   type ReactElement,
   type ReactNode,
   type Ref,
 } from 'react';
 import { renderDiagramSvgString } from '../export/svgString.js';
-import { layoutAsync, layoutSync, moveNodes } from '../geometry.js';
+import {
+  computeBounds,
+  computeGroups,
+  layoutAsync,
+  layoutSync,
+  moveNodes,
+  pullTogether,
+  type PullItem,
+} from '../geometry.js';
+import { displayNodeMap, mergeRefs, mergedMarkers, primaryRef } from '../svg/collapsed.js';
+import { MAX_FOCUS_HOPS } from '../share/deepLink.js';
 import { ColorContext } from '../svg/context.js';
-import { highlightSets, nodeDetail, routeAll, rowIndexOf, type EdgeStyle } from '../svg/routing.js';
+import type { Decorations } from '../svg/decorations.js';
+import {
+  highlightSets,
+  nodeDetail,
+  routeAll,
+  rowIndexOf,
+  type EdgeStyle,
+  type RouteCache,
+} from '../svg/routing.js';
 import { colorResolver, safeColor, type ColorMode, type PaletteOverrides } from '../theme.js';
 import { resolvePalette } from '../themeDom.js';
-import { ViewerContext, handleId, type ViewerState } from '../viewer/context.js';
-import { fitViewport, initialViewport, type Padding } from '../viewer/initialView.js';
+import { ViewerContext, handleId, type ResizeBox, type ViewerState } from '../viewer/context.js';
+import { fitViewport, type Padding } from '../viewer/initialView.js';
+import {
+  FIT_FLOOR,
+  FIT_FLOOR_NARROW,
+  FIT_FLOOR_SMALL,
+  MAX_FIT_ZOOM,
+  MINIMAP,
+  MINIMAP_NARROW,
+  MIN_INITIAL_ZOOM,
+  MIN_INITIAL_ZOOM_NARROW,
+  NARROW,
+  PAD,
+  SMALL_DIAGRAM_TABLES,
+  canvasFirstView,
+  minimapAlwaysShown,
+} from './frame.js';
 import { nodeTypes, type FlowNode, type GroupFlowNode } from '../viewer/nodes.js';
 import { edgeTypes, type RefFlowEdge } from '../viewer/RefEdge.js';
 import { SideCard } from '../viewer/SideCard.js';
@@ -60,31 +100,46 @@ import {
   type GroupDrag,
   type Pos,
 } from './drag.js';
-import { setNodePositions, setNodeSettings as setLayoutNodeSettings } from './layoutEdit.js';
+import {
+  setGroupsCollapsed,
+  setNodePositions,
+  setNodeSettings as setLayoutNodeSettings,
+  setNodeSizes,
+} from './layoutEdit.js';
 import type {
   AutoLayoutScope,
+  CanvasEdgeEvent,
   CanvasExportOptions,
+  CanvasFocus,
   CanvasNodeEvent,
   CanvasNodeKind,
+  CanvasPaneEvent,
+  CanvasResizable,
   LayoutChange,
   NodeSettings,
 } from './types.js';
-import { unplacedIds, useCanvasGeometry } from './useCanvasGeometry.js';
+import { placedBox, unplacedIds, useCanvasGeometry } from './useCanvasGeometry.js';
 
 export type {
   AutoLayoutScope,
+  CanvasEdgeEvent,
   CanvasExportOptions,
+  CanvasFocus,
   CanvasNodeEvent,
   CanvasNodeKind,
+  CanvasPaneEvent,
+  CanvasResizable,
   LayoutChange,
   NodeSettings,
 } from './types.js';
 
+/** Props of `DiagramCanvas`. */
 export interface DiagramCanvasProps {
   /** Full model (not view-filtered); `null` shows nothing (the app shows its own empty state). */
   model: DiagramModel | null;
   /** DiagramView name; default '*' (all). Unknown names render '*' and call `onUnknownView`. */
   view?: string;
+  /** Called with the name when `view` names no DiagramView of the model. */
   onUnknownView?: (name: string) => void;
   /** Controlled layout. The canvas never keeps positions of its own once a change is reported. */
   layout: Layout | null;
@@ -110,10 +165,13 @@ export interface DiagramCanvasProps {
   workerUrl?: string | URL;
   /** Node drawn with the highlight ring and its refs lit (cursor-in-block in the editor). */
   highlightedNodeId?: string | null;
+  /** Called when a table, note or group is clicked (or activated with the keyboard). */
   onNodeClick?: (e: CanvasNodeEvent) => void;
+  /** Called when a table, note or group is double-clicked. */
   onNodeDoubleClick?: (e: CanvasNodeEvent) => void;
   /** When set, the canvas calls preventDefault on the native contextmenu event. */
   onNodeContextMenu?: (e: CanvasNodeEvent) => void;
+  /** Called when the empty canvas is clicked. */
   onPaneClick?: () => void;
   /** Called when a pan or zoom ends (user or programmatic) with the viewport it ended at. */
   onViewportChange?: (viewport: Viewport) => void;
@@ -138,17 +196,48 @@ export interface DiagramCanvasProps {
   padding?: Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>;
   /** Default 'Entity-relationship diagram'. */
   ariaLabel?: string;
+  /** Class of the canvas root element. */
   className?: string;
+  /** Inline style of the canvas root element. */
   style?: CSSProperties;
   /** Overlays (toolbars, chips) rendered inside the canvas root, after the React Flow pane. */
   children?: ReactNode;
-  /** React 19 ref-as-prop. */
+  /** The imperative handle (`forwardRef`, so it works with React 18 and 19). */
   ref?: Ref<DiagramCanvasHandle>;
+  /** Search hits, paths, diff tones (docs/design/phase3-v1.md §4.2). Never moves the viewport. */
+  decorations?: Decorations | null;
+  /** Several ids lit like `highlightedNodeId` (tables, notes, groups, refs). */
+  highlightIds?: readonly string[] | null;
+  /**
+   * Focus mode: only the tables within `hops` refs of `ids` (+ the notes of the view) are shown,
+   * at their usual positions; the viewport fits them when the focus changes. Not stored.
+   */
+  focus?: CanvasFocus | null;
+  /**
+   * Model drawn (and laid out) instead of the view-filtered `model`, such as a diff's merged
+   * model. Positions still come from `layout`; nodes only in this model are placed by the sync
+   * layout and never reported through `onLayoutChange`.
+   */
+  displayModel?: DiagramModel | null;
+  /** Notes (and, with 'all', tables) get resize handles in editable mode. Default 'notes'. */
+  resizable?: CanvasResizable;
+  /** Called when a ref is clicked. */
+  onEdgeClick?: (e: CanvasEdgeEvent) => void;
+  /** When set, the canvas calls preventDefault on the native contextmenu event. */
+  onEdgeContextMenu?: (e: CanvasEdgeEvent) => void;
+  /** When set, the canvas calls preventDefault on the native contextmenu event. */
+  onPaneContextMenu?: (e: CanvasPaneEvent) => void;
+  /** Called when the empty canvas is double-clicked, with the diagram point. */
+  onPaneDoubleClick?: (e: CanvasPaneEvent) => void;
 }
 
+/** Imperative methods of a `DiagramCanvas`, reached through its `ref`. */
 export interface DiagramCanvasHandle {
+  /** Fits the whole active view into the canvas. */
   fitView(options?: { duration?: number }): void;
+  /** Zooms in one step around the centre. */
   zoomIn(): void;
+  /** Zooms out one step around the centre. */
   zoomOut(): void;
   /** Pans (keeps zoom) so the node is centred. `onlyIfHidden`: no-op when ≥ 60% of it is visible. */
   focusNode(id: string, options?: { onlyIfHidden?: boolean; duration?: number }): void;
@@ -162,13 +251,38 @@ export interface DiagramCanvasHandle {
   setSelection(ids: string[]): void;
   /** Geometry as drawn now (after drags), active view. */
   getGeometry(): DiagramGeometry | null;
+  /** The current pan and zoom. */
   getViewport(): Viewport;
+  /** Pans and zooms to `viewport`, animated over `duration` ms when given. */
   setViewport(viewport: Viewport, options?: { duration?: number }): void;
   /** null without a model. */
   exportSvg(options?: CanvasExportOptions): string | null;
   /** scale default 2; null without a model. */
   exportPng(options?: CanvasExportOptions & { scale?: number }): Promise<Blob | null>;
+  /** Prints the active view (a hidden iframe with the standalone SVG). */
   print(options?: CanvasExportOptions): void;
+  /** Fits the given nodes (all when empty), optionally capping the zoom; `padding` in px. */
+  focusNodes(
+    ids: string[],
+    options?: {
+      duration?: number;
+      maxZoom?: number;
+      /**
+       * Space to keep free around the nodes, screen px: one number for every side, or the sides
+       * an overlay covers (each at least the canvas's own padding on that side).
+       */
+      padding?: number | { top?: number; right?: number; bottom?: number; left?: number };
+    },
+  ): void;
+  /** Screen rectangle (client px) of a node as drawn now, or null. For overlays (note editor). */
+  getNodeClientRect(id: string): DOMRect | null;
+  /** Client px → diagram coordinates. */
+  clientToDiagram(clientX: number, clientY: number): { x: number; y: number };
+  /**
+   * Writes node positions (e.g. a new note placed where the user clicked) and reports one 'move'
+   * (editable); read-only canvases move the nodes locally.
+   */
+  placeNodes(positions: Record<string, { x: number; y: number }>): void;
 }
 
 /** Props DbmlViewer uses on top of the public contract (not exported from the package). */
@@ -179,39 +293,21 @@ export interface CanvasInternalProps extends DiagramCanvasProps {
   handleRef?: Ref<DiagramCanvasHandle>;
 }
 
-/** Room for the title and toolbar overlays at the top, a small margin elsewhere. */
-export const PAD = { top: 64, right: 28, bottom: 28, left: 28 } as const;
-/** Minimap size (px) and its distance from the canvas's bottom-right corner. */
-export const MINIMAP = { width: 120, height: 80, margin: 12 } as const;
-/** The smaller minimap of narrow canvases (phones, a pane narrowed by a splitter). */
-export const MINIMAP_NARROW = { width: 84, height: 56, margin: 10 } as const;
-/** Below this width the canvas counts as narrow (phones): small minimap, more overview. */
-export const NARROW = 600;
-/**
- * The 'auto' minimap is always on for diagrams of this many tables in wide canvases; otherwise it
- * appears whenever part of the diagram is off-screen (the cue that there is more to see).
- */
-const MINIMAP_MIN_TABLES = 8;
+export {
+  FIT_FLOOR,
+  FIT_FLOOR_NARROW,
+  FIT_FLOOR_SMALL,
+  MAX_FIT_ZOOM,
+  MINIMAP,
+  MINIMAP_NARROW,
+  MIN_INITIAL_ZOOM,
+  MIN_INITIAL_ZOOM_NARROW,
+  NARROW,
+  PAD,
+  SMALL_DIAGRAM_TABLES,
+};
 /** Screen px a diagram may stick out of the canvas before it counts as off-screen. */
 const OFFSCREEN_SLACK = 4;
-/**
- * The first view never zooms out further than this (column text at 12.5 × 0.85 ≈ 10.6px); bigger
- * diagrams open readable on their densest corner and pan. Phones get a little more overview.
- */
-export const MIN_INITIAL_ZOOM = 0.85;
-export const MIN_INITIAL_ZOOM_NARROW = 0.75;
-/**
- * The first view still fits (or fills one axis) down to this zoom rather than hide tables at the
- * readable one: small diagrams open whole, as most editors open them.
- */
-export const FIT_FLOOR = 0.55;
-/** Fit floor of diagrams of at most `SMALL_DIAGRAM_TABLES` tables. */
-export const FIT_FLOOR_SMALL = 0.45;
-/** Fit floor of narrow canvases (phones). */
-export const FIT_FLOOR_NARROW = 0.5;
-export const SMALL_DIAGRAM_TABLES = 12;
-/** Largest zoom of the first view and Fit: a small diagram opens a little above 1:1, centred. */
-export const MAX_FIT_ZOOM = 1.15;
 /** Part of a node that must be on screen for `focusNode(…, { onlyIfHidden })` to leave it. */
 const FOCUS_VISIBLE = 0.6;
 
@@ -291,6 +387,33 @@ function buildNodes(
       ariaLabel: editable ? `Table ${t.name}` : `Table ${t.name}. Press Enter for details.`,
     });
   }
+  // Collapsed groups (core §3.1): one card in place of their tables, dragged by its own id.
+  const titles = new Map(model.tables.map((t) => [t.id, tableTitle(t)]));
+  for (const g of model.groups) {
+    const box = geometry.groups[g.id];
+    if (!box?.collapsed) continue;
+    const memberNames = g.tableIds.flatMap((id) => {
+      const name = titles.get(id);
+      return name === undefined ? [] : [name];
+    });
+    out.push({
+      id: g.id,
+      type: 'rvCollapsedGroup',
+      position: { x: box.x, y: box.y },
+      width: box.width,
+      height: box.height,
+      data: { group: g, w: box.width, h: box.height, memberNames },
+      draggable,
+      selectable: editable,
+      connectable: false,
+      deletable: false,
+      focusable: true,
+      ariaLabel: `Group ${g.name}, collapsed (${memberNames.length} ${
+        memberNames.length === 1 ? 'table' : 'tables'
+      }). Double-click to expand.`,
+      domAttributes: { 'data-rv-collapsed': 'true' } as FlowNode['domAttributes'],
+    });
+  }
   return out;
 }
 
@@ -298,7 +421,171 @@ const KIND: Record<FlowNode['type'] & string, CanvasNodeKind> = {
   rvTable: 'table',
   rvNote: 'note',
   rvGroup: 'group',
+  rvCollapsedGroup: 'group',
 };
+
+/**
+ * `model` reduced to a focus (core `neighborhood` + `subsetModel`), or null when no focus id is a
+ * table of `model` (the focus is then ignored). Sticky notes are left out: the focus view is laid
+ * out compactly (`compactFocus`), where a note would no longer sit next to what it is about.
+ */
+export function focusModel(model: DiagramModel, focus: CanvasFocus | null): DiagramModel | null {
+  if (!focus) return null;
+  const known = new Set(model.tables.map((t) => t.id));
+  const ids = focus.ids.filter((id) => known.has(id));
+  if (!ids.length) return null;
+  const hops = Math.max(0, Math.min(MAX_FOCUS_HOPS, Math.floor(Number(focus.hops) || 0)));
+  const { tableIds } = neighborhood(model, ids, hops);
+  return subsetModel(model, { tableIds, noteIds: [] });
+}
+
+/** Space `compactFocus` keeps between the boxes it pulls together (room for the ref lines). */
+export const FOCUS_GAP = 72;
+
+/**
+ * The focus view's geometry: `geometry` restricted to `model` (a `focusModel`), then pulled
+ * together around the focused tables (`pullTogether`), so a table and its neighbours read at a
+ * useful zoom even when the full layout has them far apart. Display only: nothing of it is saved.
+ * The focused tables keep their place; the others keep their direction from them.
+ */
+export function compactFocus(
+  model: DiagramModel,
+  geometry: DiagramGeometry,
+  focusIds: readonly string[],
+): DiagramGeometry {
+  const restricted = restrictGeometry(model, geometry);
+  const shownAs = displayNodeMap(model, restricted);
+  const roots = new Set(focusIds.map((id) => shownAs.get(id) ?? id));
+  const items: PullItem[] = [];
+  for (const [id, n] of Object.entries(restricted.nodes))
+    items.push({ id, x: n.x, y: n.y, width: n.width, height: n.height, fixed: roots.has(id) });
+  for (const [id, g] of Object.entries(restricted.groups))
+    if (g.collapsed)
+      items.push({ id, x: g.x, y: g.y, width: g.width, height: g.height, fixed: roots.has(id) });
+  const fixed = items.filter((i) => i.fixed);
+  if (!fixed.length || items.length > COMPACT_FOCUS_MAX) return restricted;
+  const x0 = Math.min(...fixed.map((b) => b.x));
+  const y0 = Math.min(...fixed.map((b) => b.y));
+  const x1 = Math.max(...fixed.map((b) => b.x + b.width));
+  const y1 = Math.max(...fixed.map((b) => b.y + b.height));
+  const moved = pullTogether(items, { x: (x0 + x1) / 2, y: (y0 + y1) / 2 }, FOCUS_GAP);
+  return moved.size ? moveNodes(model, restricted, moved) : restricted;
+}
+
+/** Larger focus sets keep the positions of the whole view (pulling is quadratic). */
+const COMPACT_FOCUS_MAX = 250;
+
+/** Space between the cards `packCollapsedCards` places (room for the merged ref lines). */
+export const CARD_GAP = 96;
+
+/**
+ * Where the cards of `groupIds` go when they collapse together (Collapse all groups): each starts
+ * centred where its expanded group was, then the cards are pulled together around their common
+ * centre (`pullTogether`), keeping clear of every other node drawn now (tables outside these
+ * groups, notes, cards already collapsed, other expanded groups), which do not move. When nothing
+ * else is drawn, the cards are laid out on their own (dagre) instead. Without this
+ * a large diagram would turn into a few small cards spread over its old footprint. The members'
+ * own positions are untouched, so expanding restores the diagram as it was.
+ */
+export function packCollapsedCards(
+  model: DiagramModel,
+  geometry: DiagramGeometry,
+  groupIds: readonly string[],
+): Record<string, Pos> {
+  const collapsing = new Set(groupIds);
+  const inGroups = new Set<string>();
+  const items: PullItem[] = [];
+  const shown = new Set(model.tables.map((t) => t.id));
+  for (const g of model.groups) {
+    if (!collapsing.has(g.id)) continue;
+    const box = geometry.groups[g.id];
+    if (!box || box.collapsed) continue;
+    const members = g.tableIds.filter((id) => shown.has(id));
+    for (const id of members) inGroups.add(id);
+    const size = measureCollapsedGroup(g, members.length);
+    items.push({
+      id: g.id,
+      x: box.x + box.width / 2 - size.width / 2,
+      y: box.y + box.height / 2 - size.height / 2,
+      ...size,
+    });
+  }
+  const out: Record<string, Pos> = {};
+  if (!items.length) return out;
+  const cx = items.reduce((a, i) => a + i.x + i.width / 2, 0) / items.length;
+  const cy = items.reduce((a, i) => a + i.y + i.height / 2, 0) / items.length;
+  const fixed: PullItem[] = [];
+  for (const [id, n] of Object.entries(geometry.nodes))
+    if (!inGroups.has(id))
+      fixed.push({ id, x: n.x, y: n.y, width: n.width, height: n.height, fixed: true });
+  for (const [id, b] of Object.entries(geometry.groups))
+    if (!collapsing.has(id))
+      fixed.push({ id, x: b.x, y: b.y, width: b.width, height: b.height, fixed: true });
+  if (!fixed.length) {
+    // Nothing else is drawn (every table is in one of these groups): the cards get a layout of
+    // their own (dagre over the cards and their merged refs), centred where the diagram was.
+    const nodes: Record<string, { collapsed: true }> = {};
+    for (const i of items) nodes[i.id] = { collapsed: true };
+    try {
+      const laid = layoutSync(model, { saved: { nodes } as LayoutOptions['saved'] });
+      const cards = items.map((i) => laid.groups[i.id]).filter((b) => !!b?.collapsed);
+      if (cards.length === items.length) {
+        const lx = cards.reduce((a, b) => a + b!.x + b!.width / 2, 0) / cards.length;
+        const ly = cards.reduce((a, b) => a + b!.y + b!.height / 2, 0) / cards.length;
+        for (const i of items) {
+          const b = laid.groups[i.id]!;
+          setOwn(out, i.id, { x: Math.round(b.x + cx - lx), y: Math.round(b.y + cy - ly) });
+        }
+        return out;
+      }
+    } catch {
+      // Fall back to pulling the cards together below.
+    }
+  }
+  const moved = pullTogether([...fixed, ...items], { x: cx, y: cy }, CARD_GAP);
+  for (const i of items)
+    setOwn(out, i.id, moved.get(i.id) ?? { x: Math.round(i.x), y: Math.round(i.y) });
+  return out;
+}
+
+/**
+ * `geometry` (laid out for a bigger model) restricted to what `model` draws: positions unchanged,
+ * group boxes and bounds recomputed, ELK routes of dropped refs removed.
+ */
+export function restrictGeometry(model: DiagramModel, geometry: DiagramGeometry): DiagramGeometry {
+  const keep = new Set<string>();
+  for (const t of model.tables) keep.add(t.id);
+  for (const n of model.stickyNotes) keep.add(n.id);
+  const nodes: DiagramGeometry['nodes'] = {};
+  for (const [id, n] of Object.entries(geometry.nodes)) if (keep.has(id)) setOwn(nodes, id, n);
+  const groups = computeGroups(model, nodes, geometry.groups);
+  const edges: DiagramGeometry['edges'] = {};
+  for (const r of model.refs) {
+    const e = geometry.edges[r.id];
+    if (e) setOwn(edges, r.id, e);
+  }
+  return { nodes, groups, edges, bounds: computeBounds({ nodes, groups, edges }) };
+}
+
+/** The ids `highlight` lights: groups stand for their member tables. */
+function expandHighlight(model: DiagramModel, ids: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const id of ids) {
+    const g = model.groups.find((x) => x.id === id);
+    if (g) out.push(id, ...g.tableIds);
+    else out.push(id);
+  }
+  return out;
+}
+
+/** Whether `id` is a node `model` draws (table, note or group). */
+function isNodeOf(model: DiagramModel, id: string): boolean {
+  return (
+    model.tables.some((t) => t.id === id) ||
+    model.stickyNotes.some((n) => n.id === id) ||
+    model.groups.some((g) => g.id === id)
+  );
+}
 
 /** The model element behind a node id, for its kind and span. */
 function nodeInfo(
@@ -319,14 +606,41 @@ function nodeInfo(
  * The diagram as an interactive React Flow canvas, read-only (the docs viewer) or editable (the
  * editor: drags, auto-layout and node settings are reported as layout changes). Browser only;
  * importing the module touches no browser API.
+ *
+ * @example
+ * ```tsx
+ * import { useState } from 'react';
+ * import { compileDbml, emptyLayout, type Layout } from '@relvista/core';
+ * import { DiagramCanvas } from '@relvista/renderer';
+ * import '@relvista/renderer/styles.css';
+ *
+ * export function Editor({ dbml }: { dbml: string }) {
+ *   const [layout, setLayout] = useState<Layout>(emptyLayout());
+ *   const { model } = compileDbml(dbml);
+ *   return (
+ *     <div style={{ height: 600 }}>
+ *       <DiagramCanvas
+ *         model={model}
+ *         layout={layout}
+ *         editable
+ *         onLayoutChange={(next) => setLayout(next)}
+ *       />
+ *     </div>
+ *   );
+ * }
+ * ```
  */
-export function DiagramCanvas(props: DiagramCanvasProps): ReactElement {
-  return (
-    <ReactFlowProvider>
-      <CanvasInner {...props} />
-    </ReactFlowProvider>
-  );
-}
+export const DiagramCanvas = forwardRef<DiagramCanvasHandle, DiagramCanvasProps>(
+  function DiagramCanvas(props, ref): ReactElement {
+    // React 18 strips `ref` from a function component's props (React 19 passes it): forwardRef
+    // works in both, and the inner canvas takes the handle as `handleRef`.
+    return (
+      <ReactFlowProvider>
+        <CanvasInner {...props} handleRef={ref} />
+      </ReactFlowProvider>
+    );
+  },
+);
 
 /** DiagramCanvas with the internal extras (DbmlViewer). */
 export function DiagramCanvasInternal(props: CanvasInternalProps): ReactElement {
@@ -368,6 +682,15 @@ function CanvasInner({
   ref,
   onGeometry,
   handleRef,
+  decorations = null,
+  highlightIds: highlightIdsProp = null,
+  focus = null,
+  displayModel = null,
+  resizable = 'notes',
+  onEdgeClick,
+  onEdgeContextMenu,
+  onPaneContextMenu,
+  onPaneDoubleClick,
 }: CanvasInternalProps): ReactElement {
   const rf = useReactFlow<FlowNode, RefFlowEdge>();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -422,27 +745,76 @@ function CanvasInner({
     () => (model && viewName !== DEFAULT_VIEW ? (selectView(model, viewName) ?? model) : model),
     [model, viewName],
   );
+  /** What is laid out: the diff's merged model (rule 7), else the view's. */
+  const layoutModel = displayModel ?? viewModel;
+  /** Ids the layout may be written for (nodes only in `displayModel` never are). */
+  const realIds = useMemo(() => {
+    const out = new Set<string>();
+    if (!viewModel) return out;
+    for (const t of viewModel.tables) out.add(t.id);
+    for (const n of viewModel.stickyNotes) out.add(n.id);
+    for (const g of viewModel.groups) out.add(g.id);
+    return out;
+  }, [viewModel]);
+  const docKey = `${resetKey ?? ''}\u0000${viewName}`;
 
   // --- layout --------------------------------------------------------------------------------
+  // Read-only canvases collapse groups locally (a double-click): an overlay on the layout prop,
+  // dropped when the layout, document or view changes.
+  const [localLayout, setLocalLayout] = useState<{
+    for: Layout | null;
+    key: string;
+    value: Layout;
+  } | null>(null);
+  const shownLayout =
+    !editable && localLayout && localLayout.for === layout && localLayout.key === docKey
+      ? localLayout.value
+      : layout;
   const detail: DetailLevel = detailLevel ?? layout?.settings?.detailLevel ?? 'all';
   const edges_: EdgeStyle = edgeStyle ?? layout?.settings?.theme?.edgeStyle ?? 'orthogonal';
   const saved = useMemo(
-    () => (layout ? mergeViewDefaults(layout, viewName) : null),
-    [layout, viewName],
+    () => (shownLayout ? mergeViewDefaults(shownLayout, viewName) : null),
+    [shownLayout, viewName],
   );
   const { geometry, final: layoutFinal } = useCanvasGeometry(
-    viewModel,
+    layoutModel,
     saved,
     detail,
     aspect,
     workerUrl,
+    !displayModel,
+  );
+
+  // --- focus (rule 3): fewer tables drawn, at the positions of the whole view ----------------
+  const focusKey = focus ? JSON.stringify([focus.ids, focus.hops]) : '';
+  const focusRef = useRef(focus);
+  focusRef.current = focus;
+  const focused = useMemo(
+    () => (layoutModel && focusKey ? focusModel(layoutModel, focusRef.current) : null),
+    [layoutModel, focusKey],
+  );
+  /** The model drawn. */
+  const drawModel = focused ?? layoutModel;
+  /** The geometry drawn (before drags): in focus mode, compacted around the focused tables. */
+  const drawGeometry = useMemo(
+    () =>
+      focused && geometry
+        ? compactFocus(
+            focused,
+            geometry,
+            (focusRef.current?.ids ?? []).filter((id) => focused.tables.some((t) => t.id === id)),
+          )
+        : geometry,
+    [focused, geometry],
   );
 
   // --- nodes (dragging moves them locally until the change is reported) ----------------------
-  const nodeDrag = editable || draggable;
+  // The focus view is display only (its positions are not the saved ones): nothing moves there.
+  const nodeDrag = (editable || draggable) && !focused;
   const baseNodes = useMemo(
-    () => (viewModel && geometry ? buildNodes(viewModel, geometry, nodeDrag, editable) : []),
-    [viewModel, geometry, nodeDrag, editable],
+    () =>
+      drawModel && drawGeometry ? buildNodes(drawModel, drawGeometry, nodeDrag, editable) : [],
+    [drawModel, drawGeometry, nodeDrag, editable],
   );
   const [nodes, setNodes] = useState<FlowNode[]>(baseNodes);
   const [nodesFor, setNodesFor] = useState(baseNodes);
@@ -467,6 +839,9 @@ function CanvasInner({
   const onNodesChange = useCallback<OnNodesChange<FlowNode>>((changes) => {
     // Group boxes are computed from their members, never moved themselves.
     for (const id of groupIdsRef.current) changes.removeForNode(id);
+    // Nothing left (a group box measured): no new node array, so no re-render and no fresh group
+    // node for React Flow to measure again.
+    if (changes.isEmpty()) return;
     let sel: Set<string> | null = null;
     for (const c of changes.getByType('select')) {
       sel ??= new Set(selectionRef.current);
@@ -478,68 +853,102 @@ function CanvasInner({
   }, []);
 
   const current = useMemo(() => {
-    if (!viewModel || !geometry) return null;
-    return moveNodes(viewModel, geometry, new Map(nodes.map((n) => [n.id, n.position])));
-  }, [viewModel, geometry, nodes]);
+    if (!drawModel || !drawGeometry) return null;
+    return moveNodes(
+      drawModel,
+      drawGeometry,
+      new Map(
+        nodes.map((n) => [
+          n.id,
+          {
+            ...n.position,
+            ...(n.width !== undefined ? { width: n.width } : {}),
+            ...(n.height !== undefined ? { height: n.height } : {}),
+          },
+        ]),
+      ),
+    );
+  }, [drawModel, drawGeometry, nodes]);
 
-  const routes = useMemo(
-    () =>
-      viewModel && current
-        ? routeAll({ model: viewModel, geometry: current, detailLevel: detail, edgeStyle: edges_ })
-        : new Map(),
-    [viewModel, current, detail, edges_],
-  );
+  // Routes go round the tables (§4.1). While a drag is in progress only the refs of the dragged
+  // nodes are searched again (RouteCache); the drag's end routes everything afresh.
+  const [dragging, setDragging] = useState<ReadonlySet<string> | null>(null);
+  const routeCache = useRef<RouteCache | null>(null);
+  const routes = useMemo(() => {
+    if (!drawModel || !current) return new Map<string, never>();
+    const ctx = { model: drawModel, geometry: current, detailLevel: detail, edgeStyle: edges_ };
+    const prev = routeCache.current;
+    const r = dragging && prev ? routeAll(ctx, { previous: prev, dirty: dragging }) : routeAll(ctx);
+    routeCache.current = r.cache;
+    return r;
+  }, [drawModel, current, detail, edges_, dragging]);
 
   // Every row a ref attaches to gets handles on both sides and of both types. The set depends
   // only on the model, so it is stable while dragging flips sides (React Flow measures handles
   // when a node mounts).
   const handles = useMemo(() => {
     const out = new Map<string, Set<string>>();
-    if (!viewModel || !geometry) return out;
-    const tables = new Map(viewModel.tables.map((t) => [t.id, t]));
+    if (!drawModel || !drawGeometry) return out;
+    const tables = new Map(drawModel.tables.map((t) => [t.id, t]));
+    const shownAs = displayNodeMap(drawModel, drawGeometry);
     const add = (tableId: string, column: string | undefined) => {
       const t = tables.get(tableId);
       if (!t) return;
-      const row = rowIndexOf(t, column, nodeDetail(geometry, tableId, detail));
-      let s = out.get(tableId);
-      if (!s) out.set(tableId, (s = new Set()));
+      // A member of a collapsed group attaches to the group card's header.
+      const group = shownAs.get(tableId);
+      const node = group ?? tableId;
+      const row =
+        group !== undefined ? -1 : rowIndexOf(t, column, nodeDetail(drawGeometry, tableId, detail));
+      let s = out.get(node);
+      if (!s) out.set(node, (s = new Set()));
       for (const side of ['left', 'right'] as const)
         for (const type of ['source', 'target'] as const) s.add(handleId(row, side, type));
     };
-    for (const r of viewModel.refs) {
+    for (const r of drawModel.refs) {
       add(r.from.tableId, r.from.columns[0]);
       add(r.to.tableId, r.to.columns[0]);
     }
     return out;
-  }, [viewModel, geometry, detail]);
+  }, [drawModel, drawGeometry, detail]);
 
+  // One edge per drawn line (refs of a collapsed group to the same node merge, §4.2), inactive
+  // lines first so that active refs draw over them.
   const edges = useMemo(() => {
     const edges: RefFlowEdge[] = [];
-    for (const r of viewModel?.refs ?? []) {
-      const route = routes.get(r.id);
-      if (!route) continue;
+    if (!drawModel || !current) return edges;
+    const lines = mergeRefs(drawModel, current).flatMap((line) => {
+      const p = primaryRef(line, routes);
+      return p ? [{ line, ...p, inactive: line.refs.every((r) => r.inactive) }] : [];
+    });
+    for (const { line, ref, route } of [
+      ...lines.filter((l) => l.inactive),
+      ...lines.filter((l) => !l.inactive),
+    ]) {
+      const merged = line.refs.length > 1 ? { refs: line.refs, ...mergedMarkers(line, ref) } : null;
       edges.push({
-        id: r.id,
+        id: line.id,
         type: 'rvRef',
-        source: r.from.tableId,
-        target: r.to.tableId,
+        source: route.fromNode ?? ref.from.tableId,
+        target: route.toNode ?? ref.to.tableId,
         sourceHandle: handleId(route.from.row, route.from.side, 'source'),
         targetHandle: handleId(route.to.row, route.to.side, 'target'),
-        data: { refModel: r, route },
+        data: { refModel: ref, route, merged, refIds: line.refs.map((r) => r.id) },
         selectable: false,
         focusable: false,
         deletable: false,
+        domAttributes: { 'data-id': ref.id } as RefFlowEdge['domAttributes'],
       });
     }
     return edges;
-  }, [viewModel, routes]);
+  }, [drawModel, current, routes]);
 
   const groupNodes = useMemo<GroupFlowNode[]>(() => {
-    if (!viewModel || !current) return [];
+    if (!drawModel || !current) return [];
     const out: GroupFlowNode[] = [];
-    for (const g of viewModel.groups) {
+    for (const g of drawModel.groups) {
       const box = current.groups[g.id];
-      if (!box) continue;
+      // Collapsed groups are nodes of their own (buildNodes).
+      if (!box || box.collapsed) continue;
       out.push({
         id: g.id,
         type: 'rvGroup',
@@ -575,31 +984,65 @@ function CanvasInner({
   // --- hover / highlight / details card -------------------------------------------------------
   const [hovered, setHovered] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
-  const highlightIds = useMemo(() => {
-    if (!viewModel || !highlightedNodeId) return null;
-    const g = viewModel.groups.find((x) => x.id === highlightedNodeId);
-    if (g) return g.tableIds;
-    const known =
-      viewModel.tables.some((t) => t.id === highlightedNodeId) ||
-      viewModel.stickyNotes.some((n) => n.id === highlightedNodeId);
-    return known ? [highlightedNodeId] : null;
-  }, [viewModel, highlightedNodeId]);
+  // Highlight: `highlightedNodeId` and `highlightIds` (tables, notes, groups, refs); unknown ids
+  // are ignored. Nodes among them get the ring; groups light their member tables.
+  const highlightKey = [highlightedNodeId ?? '', ...(highlightIdsProp ?? [])].join('\u0000');
+  const highlightList = useRef<string[]>([]);
+  highlightList.current = [
+    ...(highlightedNodeId ? [highlightedNodeId] : []),
+    ...(highlightIdsProp ?? []),
+  ];
+  const highlight = useMemo(() => {
+    if (!drawModel) return null;
+    const refIds = new Set(drawModel.refs.map((r) => r.id));
+    const known = highlightList.current.filter((id) => isNodeOf(drawModel, id) || refIds.has(id));
+    if (!known.length) return null;
+    return {
+      ring: new Set(known.filter((id) => !refIds.has(id))) as ReadonlySet<string>,
+      lit: expandHighlight(drawModel, known),
+    };
+  }, [drawModel, highlightKey]);
   const lit = useMemo(
     () =>
-      viewModel && hovered
-        ? highlightSets(viewModel, [hovered])
-        : viewModel && highlightIds
-          ? highlightSets(viewModel, highlightIds)
+      drawModel && hovered
+        ? highlightSets(drawModel, expandHighlight(drawModel, [hovered]))
+        : drawModel && highlight
+          ? highlightSets(drawModel, highlight.lit)
           : null,
-    [viewModel, hovered, highlightIds],
+    [drawModel, hovered, highlight],
   );
   const onEnter = useCallback<NodeMouseHandler<FlowNode>>((_, n) => {
     if (n.type !== 'rvGroup') setHovered(n.id);
   }, []);
   const onLeave = useCallback<NodeMouseHandler<FlowNode>>(() => setHovered(null), []);
   const selectedTable =
-    sideCard && selected ? viewModel?.tables.find((t) => t.id === selected) : undefined;
+    sideCard && selected ? drawModel?.tables.find((t) => t.id === selected) : undefined;
 
+  // --- resize (rule 2): one 'resize' when the handles are let go --------------------------------
+  const resizeStart = useRef(new Map<string, Pos>());
+  const onResizeStart = useCallback((id: string) => {
+    const n = nodesRef.current.find((x) => x.id === id);
+    if (n) resizeStart.current.set(id, { x: n.position.x, y: n.position.y });
+  }, []);
+  const onResizeEnd = useCallback((id: string, box: ResizeBox) => {
+    const start = resizeStart.current.get(id);
+    resizeStart.current.delete(id);
+    const L = live.current;
+    if (!L.editable || L.focused || !L.realIds.has(id)) return;
+    const moved = !!start && (Math.abs(start.x - box.x) >= 0.5 || Math.abs(start.y - box.y) >= 0.5);
+    const sizes: Record<string, { w: number; h: number; x?: number; y?: number }> = {};
+    setOwn(sizes, id, {
+      w: box.width,
+      h: box.height,
+      ...(moved ? { x: box.x, y: box.y } : {}),
+    });
+    const fallback: Record<string, Pos> = {};
+    if (start) setOwn(fallback, id, start);
+    const next = setNodeSizes(L.layout, L.viewName, sizes, fallback);
+    L.onLayoutChange?.(next, { kind: 'resize', view: L.viewName, ids: [id] });
+  }, []);
+
+  const edgeEvents = !!onEdgeClick || !!onEdgeContextMenu;
   const viewerState = useMemo<ViewerState>(
     () => ({
       detailLevel: detail,
@@ -607,10 +1050,16 @@ function CanvasInner({
       dim: !!hovered,
       hoveredId: hovered,
       selectedId: selectedTable ? selected : null,
-      highlightedId: highlightIds ? highlightedNodeId : null,
+      highlighted: highlight?.ring ?? EMPTY_SET,
+      decorations,
       selection,
-      groupHandles: editable || !!onNodeClick,
+      // Group header bands always take the pointer: a double-click there collapses the group.
+      groupHandles: true,
       handles,
+      resizable: editable && !focused ? resizable : false,
+      onResizeStart,
+      onResizeEnd,
+      edgeEvents,
     }),
     [
       detail,
@@ -618,12 +1067,16 @@ function CanvasInner({
       hovered,
       selected,
       selectedTable,
-      highlightIds,
-      highlightedNodeId,
+      highlight,
+      decorations,
       selection,
       editable,
-      onNodeClick,
+      focused,
       handles,
+      resizable,
+      onResizeStart,
+      onResizeEnd,
+      edgeEvents,
     ],
   );
   // The canvas colour the page actually shows (a host palette or custom CSS may replace relvista's):
@@ -654,6 +1107,17 @@ function CanvasInner({
   // --- node events ---------------------------------------------------------------------------
   const live = useRef({
     viewModel,
+    drawModel,
+    focused: !!focused,
+    realIds,
+    shownLayout,
+    docKey,
+    decorations,
+    padding: PAD as Padding,
+    onEdgeClick,
+    onEdgeContextMenu,
+    onPaneContextMenu,
+    onPaneDoubleClick,
     current,
     geometry,
     layout,
@@ -675,6 +1139,16 @@ function CanvasInner({
   live.current = {
     ...live.current,
     viewModel,
+    drawModel,
+    focused: !!focused,
+    realIds,
+    shownLayout,
+    docKey,
+    decorations,
+    onEdgeClick,
+    onEdgeContextMenu,
+    onPaneContextMenu,
+    onPaneDoubleClick,
     current,
     geometry,
     layout,
@@ -706,7 +1180,7 @@ function CanvasInner({
       },
       source?: 'keyboard',
     ): CanvasNodeEvent => {
-      const info = nodeInfo(live.current.viewModel, id);
+      const info = nodeInfo(live.current.drawModel, id);
       return {
         id,
         kind: info?.kind ?? KIND[(type ?? 'rvTable') as keyof typeof KIND] ?? 'table',
@@ -731,9 +1205,41 @@ function CanvasInner({
     },
     [sideCard, editable, nodeEvent],
   );
+  /**
+   * Collapses or expands a group (rule 1). Editable: one 'settings' change; read-only: a local
+   * overlay on the layout, never reported.
+   */
+  const toggleCollapse = useCallback((id: string) => {
+    const L = live.current;
+    const box = L.current?.groups[id];
+    if (!box) return;
+    const collapsed = !box.collapsed;
+    const boxes: Record<string, Pos> = {};
+    setOwn(boxes, id, { x: box.x, y: box.y });
+    if (L.editable) {
+      if (!L.realIds.has(id)) return;
+      const next = setGroupsCollapsed(L.layout, L.viewName, [id], collapsed, boxes);
+      L.onLayoutChange?.(next, {
+        kind: 'settings',
+        view: L.viewName,
+        ids: [id],
+        settings: { collapsed },
+      });
+    } else {
+      setLocalLayout({
+        for: L.layout,
+        key: L.docKey,
+        value: setGroupsCollapsed(L.shownLayout, L.viewName, [id], collapsed, boxes),
+      });
+    }
+  }, []);
   const onDoubleClick = useCallback<NodeMouseHandler<FlowNode>>(
-    (e, n) => live.current.onNodeDoubleClick?.(nodeEvent(n.id, n.type, e)),
-    [nodeEvent],
+    (e, n) => {
+      // Expanded groups take the pointer only on their header band.
+      if (n.type === 'rvGroup' || n.type === 'rvCollapsedGroup') toggleCollapse(n.id);
+      live.current.onNodeDoubleClick?.(nodeEvent(n.id, n.type, e));
+    },
+    [nodeEvent, toggleCollapse],
   );
   const onContextMenu = useCallback<NodeMouseHandler<FlowNode>>(
     (e, n) => {
@@ -766,15 +1272,70 @@ function CanvasInner({
     setSelected(null);
     live.current.onPaneClick?.();
   }, []);
+  const paneEvent = useCallback(
+    (e: { clientX: number; clientY: number }): CanvasPaneEvent => {
+      const p = rf.screenToFlowPosition({ x: e.clientX, y: e.clientY }, { snapToGrid: false });
+      return { clientX: e.clientX, clientY: e.clientY, x: p.x, y: p.y };
+    },
+    [rf],
+  );
+  const onPaneMenu = useCallback(
+    (e: MouseEvent | ReactMouseEvent) => {
+      const cb = live.current.onPaneContextMenu;
+      if (!cb) return;
+      e.preventDefault();
+      cb(paneEvent(e));
+    },
+    [paneEvent],
+  );
+  const onRootDoubleClick = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      const cb = live.current.onPaneDoubleClick;
+      const el = e.target as Element;
+      if (!cb || !el.classList?.contains('react-flow__pane')) return;
+      cb(paneEvent(e));
+    },
+    [paneEvent],
+  );
+  const edgeEvent = useCallback((e: ReactMouseEvent, edge: RefFlowEdge): CanvasEdgeEvent | null => {
+    const ref = edge.data?.refModel;
+    if (!ref) return null;
+    return { id: ref.id, span: ref.span ?? null, clientX: e.clientX, clientY: e.clientY };
+  }, []);
+  const onEdgeClickRf = useCallback<EdgeMouseHandler<RefFlowEdge>>(
+    (e, edge) => {
+      const ev = edgeEvent(e, edge);
+      if (ev) live.current.onEdgeClick?.(ev);
+    },
+    [edgeEvent],
+  );
+  const onEdgeMenuRf = useCallback<EdgeMouseHandler<RefFlowEdge>>(
+    (e, edge) => {
+      const cb = live.current.onEdgeContextMenu;
+      if (!cb) return;
+      e.preventDefault();
+      const ev = edgeEvent(e, edge);
+      if (ev) cb(ev);
+    },
+    [edgeEvent],
+  );
 
   // --- committing moves ---------------------------------------------------------------------
   const commitMove = useCallback((moved: ReadonlyMap<string, Pos>) => {
     const L = live.current;
-    if (!L.editable || moved.size === 0) return;
+    // Focus mode draws display-only positions (compactFocus): they are never written.
+    if (!L.editable || L.focused) return;
+    // Nodes only in `displayModel` (a diff's removed tables) are never written (rule 7).
     const positions: Record<string, Pos> = {};
-    for (const [id, p] of moved) setOwn(positions, id, p);
+    const ids: string[] = [];
+    for (const [id, p] of moved) {
+      if (!L.realIds.has(id)) continue;
+      setOwn(positions, id, p);
+      ids.push(id);
+    }
+    if (!ids.length) return;
     const next = setNodePositions(L.layout, L.viewName, positions);
-    L.onLayoutChange?.(next, { kind: 'move', view: L.viewName, ids: Array.from(moved.keys()) });
+    L.onLayoutChange?.(next, { kind: 'move', view: L.viewName, ids });
   }, []);
 
   const nudge = useMemo(
@@ -801,6 +1362,7 @@ function CanvasInner({
         const members = visibleMembers(node.data.group.tableIds, byId);
         const group = startGroupDrag(node.id, node.position, members, byId);
         dragRef.current = { start: new Map(group.members), group };
+        setDragging(new Set(group.members.keys()));
         return;
       }
       const start = new Map<string, Pos>();
@@ -810,6 +1372,7 @@ function CanvasInner({
         start.set(n.id, { x: p.x, y: p.y });
       }
       dragRef.current = { start, group: null };
+      setDragging(new Set(start.keys()));
     },
     [nudge],
   );
@@ -823,6 +1386,7 @@ function CanvasInner({
     (_, node, dragged) => {
       const d = dragRef.current;
       dragRef.current = null;
+      setDragging(null);
       if (!d) return;
       let end: Map<string, Pos>;
       if (d.group) {
@@ -843,13 +1407,13 @@ function CanvasInner({
       if (e.key !== 'Enter' && e.key !== ' ') return;
       const el = e.target as HTMLElement;
       const id = nodeIdOf(el);
-      if (!id || !viewModel) return;
-      const isTable = viewModel.tables.some((t) => t.id === id);
+      if (!id || !drawModel) return;
+      const isTable = drawModel.tables.some((t) => t.id === id);
       if (sideCard && isTable) {
         e.preventDefault();
         setSelected((s) => (s === id ? null : id));
       }
-      if (e.key === 'Enter' && live.current.onNodeClick && nodeInfo(viewModel, id)) {
+      if (e.key === 'Enter' && live.current.onNodeClick && nodeInfo(drawModel, id)) {
         const r = el.getBoundingClientRect();
         live.current.onNodeClick(
           nodeEvent(
@@ -867,7 +1431,7 @@ function CanvasInner({
         );
       }
     },
-    [viewModel, sideCard, nodeEvent],
+    [drawModel, sideCard, nodeEvent],
   );
 
   const onKeyDownCapture = useCallback(
@@ -902,16 +1466,14 @@ function CanvasInner({
   );
 
   // --- minimap / padding ---------------------------------------------------------------------
-  const tableCount = viewModel?.tables.length ?? 0;
+  const tableCount = drawModel?.tables.length ?? 0;
   const mini = narrow ? MINIMAP_NARROW : MINIMAP;
   /** Shown whatever the viewport (an explicit `minimap`, or a big diagram in a wide canvas). */
-  const minimapAlways =
-    minimap === true ||
-    (minimap === 'auto' && !!size && !narrow && tableCount >= MINIMAP_MIN_TABLES);
+  const minimapAlways = !!size && minimapAlwaysShown(minimap, size.width, tableCount);
   // World box of everything drawn: the laid-out bounds plus dragged nodes.
   const contentBox = useMemo(() => {
-    if (!geometry) return null;
-    const b = geometry.bounds;
+    if (!drawGeometry) return null;
+    const b = drawGeometry.bounds;
     let [x0, y0, x1, y1] = [b.x, b.y, b.x + b.width, b.y + b.height];
     for (const n of nodes) {
       const w = n.width ?? 0;
@@ -922,7 +1484,7 @@ function CanvasInner({
       y1 = Math.max(y1, n.position.y + h);
     }
     return { x0, y0, x1, y1 };
-  }, [geometry, nodes]);
+  }, [drawGeometry, nodes]);
   // Counted only once this document's first view is on screen (not React Flow's default one).
   const [viewShownFor, setViewShownFor] = useState<string | null>(null);
   const offscreen = useViewportStore((st) => {
@@ -946,9 +1508,9 @@ function CanvasInner({
         : basePadding,
     [showMinimap, basePadding, mini],
   );
+  live.current.padding = padding;
 
   // --- viewport ------------------------------------------------------------------------------
-  const minZoom = narrow ? MIN_INITIAL_ZOOM_NARROW : MIN_INITIAL_ZOOM;
   const canvasSize = useCallback(() => {
     const el = rootRef.current;
     return { width: el?.clientWidth ?? 0, height: el?.clientHeight ?? 0 };
@@ -972,62 +1534,18 @@ function CanvasInner({
    */
   const initialView = useCallback(
     (g: DiagramGeometry, duration: number) => {
-      const s = canvasSize();
-      const withMinimap = {
-        ...basePadding,
-        bottom: basePadding.bottom + mini.height + mini.margin,
-      };
-      // A first view that cannot show everything gets the 'auto' minimap as the cue.
-      const fitBare = fitViewport({ bounds: g.bounds, ...s, padding: basePadding, maxZoom: 1 });
-      const overflows = !!fitBare && fitBare.zoom < minZoom;
-      const minimapPlanned = minimapAlways || (minimap === 'auto' && overflows);
-      // The minimap only takes the bottom-right corner: a first view that cannot show everything
-      // uses the full height and keeps tables out from under it.
-      const minimapBox = {
-        x: s.width - mini.margin - mini.width,
-        y: s.height - mini.margin - mini.height,
-        width: mini.width,
-        height: mini.height,
-      };
-      const first = viewModel?.tables[0];
-      const anchor = first ? g.nodes[first.id] : undefined;
-      const tables = viewModel?.tables.length ?? 0;
-      const vp = initialViewport({
-        ...(anchor ? { anchor } : {}),
-        bounds: g.bounds,
-        nodes: Object.values(g.nodes),
-        groups: Object.values(g.groups),
-        ...s,
-        fitPadding: minimapAlways ? withMinimap : basePadding,
+      const { detail, minimapHeld } = canvasFirstView({
+        geometry: g,
+        model: drawModel ?? null,
+        ...canvasSize(),
         padding: basePadding,
-        ...(minimapPlanned ? { obstacles: [minimapBox] } : {}),
-        maxZoom: MAX_FIT_ZOOM,
-        minZoom,
-        fitFloor: narrow
-          ? FIT_FLOOR_NARROW
-          : tables <= SMALL_DIAGRAM_TABLES
-            ? FIT_FLOOR_SMALL
-            : FIT_FLOOR,
+        minimap,
       });
-      // The minimap never covers a table in the first view: when no window avoids it, it waits.
-      const covers =
-        !!vp &&
-        minimapPlanned &&
-        Object.values(g.nodes).some((n) => {
-          const x = vp.x + n.x * vp.zoom;
-          const y = vp.y + n.y * vp.zoom;
-          return (
-            x < minimapBox.x + minimapBox.width &&
-            x + n.width * vp.zoom > minimapBox.x &&
-            y < minimapBox.y + minimapBox.height &&
-            y + n.height * vp.zoom > minimapBox.y
-          );
-        });
-      setMinimapHeld(covers);
-      if (vp) void rf.setViewport(vp, { duration });
+      setMinimapHeld(minimapHeld);
+      if (detail) void rf.setViewport(detail.viewport, { duration });
       else fit(duration, g);
     },
-    [rf, fit, basePadding, minZoom, canvasSize, minimapAlways, minimap, mini, viewModel, narrow],
+    [rf, fit, basePadding, canvasSize, minimap, drawModel],
   );
 
   // The initial view is applied per document (`resetKey`) and view. Until the layout is final
@@ -1041,12 +1559,13 @@ function CanvasInner({
   const savedApplied = useRef(false);
   /** resetKey whose `initialViewport` was used (each document's is used once). */
   const initialVpFor = useRef<{ key: string | undefined } | null>(null);
-  const stageKey = `${resetKey ?? ''}\u0000${viewName}`;
+  const stageKey = docKey;
   if (viewStage.current.key !== stageKey) viewStage.current = { key: stageKey, stage: 'pending' };
   useEffect(() => {
     const st = viewStage.current;
-    if (st.stage === 'done' || !geometry || Object.keys(geometry.nodes).length === 0) return;
-    const g = geometry;
+    const g = drawGeometry;
+    if (st.stage === 'done' || !g) return;
+    if (!Object.keys(g.nodes).length && !Object.values(g.groups).some((x) => x.collapsed)) return;
     const final = layoutFinal;
     let own = ownViewport && initialVpFor.current?.key !== resetKey ? ownViewport : undefined;
     // A restored session viewport that shows the whole diagram smaller than the fit would (saved in
@@ -1077,7 +1596,29 @@ function CanvasInner({
     }, 0);
     return () => clearTimeout(t);
     // Only a new geometry or document/view drives this; see above.
-  }, [geometry, layoutFinal, stageKey]);
+  }, [drawGeometry, layoutFinal, stageKey]);
+
+  // Focus (rule 3): the viewport fits the focused tables whenever the focus changes (not on the
+  // first view, which already frames what is drawn).
+  const focusFitted = useRef(focusKey);
+  useEffect(() => {
+    if (focusFitted.current === focusKey) return;
+    focusFitted.current = focusKey;
+    if (viewStage.current.stage === 'pending') return;
+    viewMoved.current = true;
+    const t = setTimeout(() => live.current.fit(250), 0);
+    return () => clearTimeout(t);
+  }, [focusKey]);
+
+  // Collapse / expand all groups: the view fits the new picture once it is drawn.
+  const fitOnNextGeometry = useRef(false);
+  useEffect(() => {
+    if (!fitOnNextGeometry.current || !drawGeometry) return;
+    fitOnNextGeometry.current = false;
+    viewMoved.current = true;
+    const t = setTimeout(() => live.current.fit(250), 0);
+    return () => clearTimeout(t);
+  }, [drawGeometry]);
 
   // Until the user moves it, the first view follows the canvas size: a pane resized right after
   // opening (a restored splitter, a window snapped to half the screen, a viewer that shrinks to
@@ -1105,8 +1646,8 @@ function CanvasInner({
   const geometryCb = useRef(onGeometry);
   geometryCb.current = onGeometry;
   useEffect(() => {
-    geometryCb.current?.(geometry);
-  }, [geometry]);
+    geometryCb.current?.(drawGeometry);
+  }, [drawGeometry]);
 
   // Editable: ELK's placement of nodes without a saved position becomes saved positions (one
   // 'place' change), so later edits never reshuffle them.
@@ -1115,11 +1656,12 @@ function CanvasInner({
     if (!editable || !layoutFinal || !viewModel || !geometry) return;
     if (placedFor.current === geometry) return;
     placedFor.current = geometry;
-    const ids = unplacedIds(viewModel, saved).filter((id) => geometry.nodes[id]);
+    // Only the real model's nodes (a diff's removed tables stay unsaved, rule 7).
+    const ids = unplacedIds(viewModel, saved).filter((id) => placedBox(geometry, id));
     if (!ids.length) return;
     const positions: Record<string, Pos> = {};
     for (const id of ids) {
-      const n = geometry.nodes[id]!;
+      const n = placedBox(geometry, id)!;
       setOwn(positions, id, { x: n.x, y: n.y });
     }
     const L = live.current;
@@ -1207,7 +1749,7 @@ function CanvasInner({
         const positions: Record<string, Pos> = {};
         const ids: string[] = [];
         for (const id of unplacedIds(vm, { nodes: nodesIn })) {
-          const n = g.nodes[id];
+          const n = placedBox(g, id);
           if (!n) continue;
           setOwn(positions, id, { x: n.x, y: n.y });
           ids.push(id);
@@ -1228,10 +1770,36 @@ function CanvasInner({
       setNodeSettings(ids, settings) {
         const L = live.current;
         if (!L.editable || !ids.length) return;
+        // Drawn positions: tables, notes and group boxes (fallbacks of the default view).
         const drawn: Record<string, Pos> = {};
         for (const [id, n] of Object.entries(L.current?.nodes ?? {}))
           setOwn(drawn, id, { x: n.x, y: n.y });
-        const next = setLayoutNodeSettings(L.layout, L.viewName, ids, settings, drawn);
+        for (const [id, b] of Object.entries(L.current?.groups ?? {}))
+          setOwn(drawn, id, { x: b.x, y: b.y });
+        const groupIds = new Set((L.viewModel?.groups ?? []).map((g) => g.id));
+        const groups = ids.filter((id) => groupIds.has(id));
+        let next: Layout;
+        if (settings.collapsed !== undefined && groups.length) {
+          // Collapsing a group also writes where its box is, so the card stays there (rule 1).
+          // Several at once (Collapse all groups): the cards are packed together instead, and the
+          // view fits the result once it is drawn (as it does when they expand again).
+          const many = groups.length > 1;
+          if (many && settings.collapsed && L.current && L.viewModel)
+            Object.assign(drawn, packCollapsedCards(L.viewModel, L.current, groups));
+          if (many) fitOnNextGeometry.current = true;
+          next = setGroupsCollapsed(L.layout, L.viewName, groups, settings.collapsed, drawn);
+          const others = ids.filter((id) => !groupIds.has(id));
+          if (others.length)
+            next = setLayoutNodeSettings(
+              next,
+              L.viewName,
+              others,
+              { collapsed: settings.collapsed },
+              drawn,
+            );
+          if (settings.pinned !== undefined)
+            next = setLayoutNodeSettings(next, L.viewName, ids, { pinned: settings.pinned }, drawn);
+        } else next = setLayoutNodeSettings(L.layout, L.viewName, ids, settings, drawn);
         L.onLayoutChange?.(next, {
           kind: 'settings',
           view: L.viewName,
@@ -1245,6 +1813,79 @@ function CanvasInner({
       },
       // The state setter of the same name (a method does not shadow it).
       setSelection: (ids) => setSelection(ids.length ? new Set(ids) : EMPTY_SET),
+      focusNodes(ids, o) {
+        const g = live.current.current;
+        const vm = live.current.drawModel;
+        if (!g || !vm) return;
+        let bounds: Box = g.bounds;
+        if (ids.length) {
+          const shownAs = displayNodeMap(vm, g);
+          const boxes: Box[] = [];
+          for (const id of ids) {
+            const b =
+              placedBox(g, id) ??
+              (Object.hasOwn(g.groups, id) ? g.groups[id] : undefined) ??
+              (shownAs.has(id) ? g.groups[shownAs.get(id)!] : undefined);
+            if (b) boxes.push(b);
+          }
+          if (!boxes.length) return;
+          const x0 = Math.min(...boxes.map((b) => b.x));
+          const y0 = Math.min(...boxes.map((b) => b.y));
+          const x1 = Math.max(...boxes.map((b) => b.x + b.width));
+          const y1 = Math.max(...boxes.map((b) => b.y + b.height));
+          bounds = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+        }
+        const p = o?.padding;
+        const base = live.current.padding;
+        const side = (k: keyof Padding) => {
+          const v = typeof p === 'object' ? p[k] : undefined;
+          return typeof v === 'number' && Number.isFinite(v) ? Math.max(base[k], v) : base[k];
+        };
+        const pad: Padding =
+          typeof p === 'number' && Number.isFinite(p)
+            ? { top: p, right: p, bottom: p, left: p }
+            : typeof p === 'object' && p
+              ? {
+                  top: side('top'),
+                  right: side('right'),
+                  bottom: side('bottom'),
+                  left: side('left'),
+                }
+              : base;
+        const vp = fitViewport({
+          bounds,
+          ...canvasSize(),
+          padding: pad,
+          maxZoom: o?.maxZoom ?? MAX_FIT_ZOOM,
+        });
+        if (!vp) return;
+        viewMoved.current = true;
+        setMinimapHeld(false);
+        void rf.setViewport(vp, { duration: o?.duration ?? 250 });
+      },
+      getNodeClientRect(id) {
+        const root = rootRef.current;
+        if (!root) return null;
+        const el = Array.from(root.querySelectorAll<HTMLElement>('.react-flow__node')).find(
+          (n) => n.getAttribute('data-id') === id,
+        );
+        return el ? el.getBoundingClientRect() : null;
+      },
+      clientToDiagram: (clientX, clientY) =>
+        rf.screenToFlowPosition({ x: clientX, y: clientY }, { snapToGrid: false }),
+      placeNodes(positions) {
+        const moved = new Map<string, Pos>();
+        for (const [id, p] of Object.entries(positions))
+          if (Number.isFinite(p.x) && Number.isFinite(p.y)) moved.set(id, { x: p.x, y: p.y });
+        if (!moved.size) return;
+        if (live.current.editable) {
+          commitMove(moved);
+          return;
+        }
+        setNodes((ns) =>
+          ns.map((n) => (moved.has(n.id) ? { ...n, position: moved.get(n.id)! } : n)),
+        );
+      },
       getGeometry: () => live.current.current,
       getViewport: () => rf.getViewport(),
       setViewport(vp, o) {
@@ -1254,9 +1895,10 @@ function CanvasInner({
       },
       exportSvg(o) {
         const L = live.current;
-        if (!L.viewModel || !L.current) return null;
+        if (!L.drawModel || !L.current) return null;
         const colorMode = o?.colorMode ?? L.colorMode;
-        return renderDiagramSvgString(L.viewModel, L.current, {
+        return renderDiagramSvgString(L.drawModel, L.current, {
+          ...(L.decorations ? { decorations: L.decorations } : {}),
           detailLevel: L.detail,
           edgeStyle: L.edges_,
           colorMode,
@@ -1266,11 +1908,12 @@ function CanvasInner({
       },
       async exportPng(o) {
         const L = live.current;
-        if (!L.viewModel || !L.current) return null;
+        if (!L.drawModel || !L.current) return null;
         const colorMode = o?.colorMode ?? L.colorMode;
         const palette = shownPalette(colorMode);
         const { exportPng } = await import('../export/png.js');
-        return exportPng(L.viewModel, L.current, {
+        return exportPng(L.drawModel, L.current, {
+          ...(L.decorations ? { decorations: L.decorations } : {}),
           detailLevel: L.detail,
           edgeStyle: L.edges_,
           colorMode,
@@ -1281,7 +1924,7 @@ function CanvasInner({
       },
       print(o) {
         const L = live.current;
-        const vm = L.viewModel;
+        const vm = L.drawModel;
         const g = L.current;
         if (!vm || !g) return;
         // Prints are light: the page's colours when it shows light mode.
@@ -1310,7 +1953,9 @@ function CanvasInner({
       data-rv-color-mode={colorMode}
       data-rv-layout={layoutFinal ? 'done' : 'pending'}
       data-rv-editable={editable ? 'true' : 'false'}
+      {...(focused ? { 'data-rv-focus': 'true' } : {})}
       style={style}
+      onDoubleClick={onRootDoubleClick}
       onKeyDown={onKeyDown}
       onKeyDownCapture={onKeyDownCapture}
     >
@@ -1331,6 +1976,9 @@ function CanvasInner({
             onNodeDrag={onDrag}
             onNodeDragStop={onDragStop}
             onPaneClick={onPane}
+            {...(onPaneContextMenu ? { onPaneContextMenu: onPaneMenu } : {})}
+            {...(onEdgeClick ? { onEdgeClick: onEdgeClickRf } : {})}
+            {...(onEdgeContextMenu ? { onEdgeContextMenu: onEdgeMenuRf } : {})}
             onMoveStart={onMoveStart}
             onMoveEnd={onMoveEnd}
             nodesDraggable={nodeDrag}
@@ -1373,7 +2021,9 @@ function CanvasInner({
                     ? (safeColor(n.data.table.headerColor) ?? 'var(--rv-header-bg)')
                     : n.type === 'rvNote'
                       ? 'var(--rv-note-border)'
-                      : 'transparent'
+                      : n.type === 'rvCollapsedGroup'
+                        ? (safeColor(n.data.group.color) ?? 'var(--rv-group-default)')
+                        : 'transparent'
                 }
               />
             ) : null}

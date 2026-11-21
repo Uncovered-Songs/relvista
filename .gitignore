@@ -9,6 +9,7 @@ build/
 # generated
 packages/docusaurus-plugin/lib/
 apps/docs/docs/gallery/
+apps/docs/api/
 apps/docs/static/schemas/
 apps/docs/static/dbml/
 apps/docs/src/pages/third-party-notices.md

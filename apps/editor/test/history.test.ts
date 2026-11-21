@@ -1,6 +1,6 @@
 import { emptyLayout, type Layout } from '@relvista/core';
 import { describe, expect, it } from 'vitest';
-import { LayoutHistory } from '../src/state/history.js';
+import { LayoutHistory, historyActionOf } from '../src/state/history.js';
 
 const L = (x: number): Layout => {
   const l = emptyLayout();
@@ -59,5 +59,51 @@ describe('LayoutHistory', () => {
     h.clear(L(9));
     expect(h.canUndo()).toBe(false);
     expect(h.current).toEqual(L(9));
+  });
+  it("'resize' is a user edit (pushes); only 'place' amends", () => {
+    expect(historyActionOf('resize')).toBe('push');
+    expect(historyActionOf('move')).toBe('push');
+    expect(historyActionOf('settings')).toBe('push');
+    expect(historyActionOf('auto-layout')).toBe('push');
+    expect(historyActionOf('place')).toBe('amend');
+    const h = new LayoutHistory(L(0));
+    const sized = L(0);
+    sized.views['*']!.nodes['note:n'] = { x: 0, y: 0, w: 300, h: 120 };
+    h.push(sized); // what the store does for a 'resize' change
+    expect(h.canUndo()).toBe(true);
+    expect(h.undo()).toEqual(L(0));
+    expect(h.redo()).toEqual(sized);
+  });
+  it('batch merges the pushes of one action into one step (delete note: layout entries)', () => {
+    const h = new LayoutHistory(L(0));
+    h.push(L(1));
+    const result = h.batch(() => {
+      h.push(L(2)); // the note's entry removed in view '*'
+      h.push(L(3)); // … and in a named view
+      h.batch(() => h.push(L(4))); // nested: still the same step
+      return 'done';
+    });
+    expect(result).toBe('done');
+    expect(h.current).toEqual(L(4));
+    expect(h.size.past).toBe(2);
+    expect(h.undo()).toEqual(L(1));
+    expect(h.redo()).toEqual(L(4));
+    // After the batch, pushes are separate steps again.
+    h.push(L(5));
+    h.push(L(6));
+    expect(h.undo()).toEqual(L(5));
+  });
+  it('a batch that throws still closes; a batch without pushes adds no step', () => {
+    const h = new LayoutHistory(L(0));
+    h.batch(() => undefined);
+    expect(h.canUndo()).toBe(false);
+    expect(() =>
+      h.batch(() => {
+        h.push(L(1));
+        throw new Error('x');
+      }),
+    ).toThrow('x');
+    h.push(L(2));
+    expect(h.size.past).toBe(2);
   });
 });

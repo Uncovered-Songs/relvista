@@ -8,9 +8,14 @@
  * Muted tones are mixes of the site's text colour into its surface colour, so they work with any
  * surface colour. The table header band and the accent need contrast maths: the plugin computes
  * them from the site's colours in the browser (--rv-site-header-bg, --rv-site-header-text,
- * --rv-site-accent, set on the viewer); the values after the comma are the first paint.
+ * --rv-site-accent, set on the viewer); the values after the comma are the first paint, and
+ * what the static (build-time) picture shows (`.relvista-static-box`, client/static.css).
  */
-:where(.rv-viewer.rv-palette-site) {
+:where(
+  .rv-viewer.rv-palette-site,
+  .relvista-static-box.rv-palette-site,
+  .relvista-static-box.rv-palette-site > svg.rv-diagram
+) {
   /* keep in sync with SITE_CANVAS_BG in src/sitePalette.ts */
   --rv-canvas-bg: color-mix(
     in srgb,
@@ -80,7 +85,11 @@
   );
   --rv-note-text: var(--ifm-color-warning-contrast-foreground);
   --rv-selection: var(--rv-site-accent, var(--ifm-color-primary));
-  /* --rv-pk-marker, --rv-note-indicator and --rv-table-shadow keep relvista's values. */
+  /* Decoration tones (renderer §4.2): search hits and FK paths follow the site primary. */
+  --rv-match: var(--rv-site-accent, var(--ifm-color-primary));
+  --rv-path: var(--rv-site-accent, var(--ifm-color-primary));
+  /* --rv-pk-marker, --rv-note-indicator, --rv-table-shadow and the --rv-diff-* tones keep
+     relvista's values (added / removed / changed must stay green / red / amber). */
 
   /* UI chrome: toolbar, title chip, cards, menus, error banner */
   --rv-ui-bg: color-mix(in srgb, var(--ifm-background-surface-color) 94%, transparent);

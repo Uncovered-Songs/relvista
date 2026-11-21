@@ -11,7 +11,7 @@ stores everything else in a sidecar JSON file named after it: `schema.dbml` →
 automatically again.
 
 The format is defined by a JSON Schema published at
-[`https://uncovered-songs.github.io/relvista/schemas/layout-1.json`](pathname:///schemas/layout-1.json)
+[`https://relvista.github.io/relvista/schemas/layout-1.json`](pathname:///schemas/layout-1.json)
 (draft 2020-12). Point `$schema` at it and editors such as VS Code give you completion and
 validation while you edit.
 
@@ -19,7 +19,7 @@ validation while you edit.
 
 ```json title="schema.dbml.layout.json"
 {
-  "$schema": "https://uncovered-songs.github.io/relvista/schemas/layout-1.json",
+  "$schema": "https://relvista.github.io/relvista/schemas/layout-1.json",
   "version": 1,
   "views": {
     "*": {
@@ -27,8 +27,9 @@ validation while you edit.
         "public.users": { "x": 0, "y": 0, "w": 220 },
         "public.posts": { "x": 320, "y": 0, "collapsed": true },
         "billing.invoices": { "x": 0, "y": 400, "pinned": true },
-        "note:overview": { "x": -300, "y": 0 },
-        "group:auth": { "x": -20, "y": -40, "w": 600, "h": 360 }
+        "note:overview": { "x": -300, "y": 0, "w": 260, "h": 120 },
+        "group:auth": { "x": -20, "y": -40, "w": 600, "h": 360 },
+        "group:billing": { "x": 0, "y": 640, "collapsed": true }
       },
       "viewport": { "x": -40, "y": -40, "zoom": 1 },
       "edges": {
@@ -61,6 +62,16 @@ validation while you edit.
 | `x-*`                  | Extension keys, allowed at the top level and in `settings`. Tools preserve them and never interpret them.                                                                                                  |
 
 Everything else is rejected, so typos show up as errors.
+
+## Notes and groups
+
+- **Sticky notes** (`note:<name>`) take `w` and `h` as their size: the text wraps at the width,
+  which is kept between 120 and 640, and `h` is the box height as is (at least 64). The editor
+  writes both when you resize a note. Without them a note is 220 wide and as tall as its text.
+- **Table groups** (`group:<name>`) with `"collapsed": true` are drawn as one card (the group's
+  name and "3 tables") instead of the box with its tables; refs to its tables attach to the card,
+  and `x`/`y` place the card. Collapsing is per view like everything else, so a named view can show
+  a group collapsed that `"*"` shows open. On a table, `collapsed` keeps only its header.
 
 ## Views
 

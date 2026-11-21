@@ -1,0 +1,250 @@
+---
+sidebar_position: 1.6
+title: Diagram views
+description: Name subsets of a schema with DiagramView, open a diagram in a view, and keep a separate layout for each view.
+---
+
+import DbmlDiagram from '@theme/DbmlDiagram';
+
+export const shop = `Table customers {
+  id integer [pk]
+  email varchar [unique]
+  name varchar
+}
+
+Table invoices {
+id integer [pk]
+customer_id integer [ref: > customers.id]
+issued_at timestamp
+total decimal(10,2)
+}
+
+Table payments {
+id integer [pk]
+invoice_id integer [ref: > invoices.id]
+amount decimal(10,2)
+}
+
+Table products {
+id integer [pk]
+name varchar
+price decimal(10,2)
+}
+
+Table orders {
+id integer [pk]
+customer_id integer [ref: > customers.id]
+created_at timestamp
+}
+
+Table order_items {
+order_id integer [ref: > orders.id]
+product_id integer [ref: > products.id]
+quantity integer
+}
+
+Note billing_note {
+'Invoices are issued when an order ships.'
+}
+
+DiagramView billing {
+Tables {
+customers
+invoices
+payments
+}
+Notes {
+billing_note
+}
+}
+
+DiagramView catalog {
+Tables {
+products
+order_items
+orders
+}
+}`;
+
+export const shopLayout = {
+  version: 1,
+  views: {
+    '*': {
+      nodes: {
+        'public.customers': { x: 0, y: 140 },
+        'public.orders': { x: 300, y: 0 },
+        'public.order_items': { x: 600, y: 0 },
+        'public.products': { x: 900, y: 0 },
+        'public.invoices': { x: 300, y: 280 },
+        'public.payments': { x: 600, y: 280 },
+        'note:billing_note': { x: 900, y: 300 },
+      },
+    },
+    billing: {
+      nodes: {
+        'public.customers': { x: 0, y: 0 },
+        'public.invoices': { x: 0, y: 200 },
+        'public.payments': { x: 300, y: 200 },
+        'note:billing_note': { x: 300, y: 20 },
+      },
+    },
+  },
+};
+
+A large schema is easier to read in parts. A **`DiagramView`** names a subset of it — some tables,
+sticky notes, table groups or whole schemas — right in the DBML file, so dbdiagram.io, the
+[relvista editor](./editor.md) and every diagram in your docs show the same views.
+
+## Declaring a view
+
+```dbml static
+DiagramView billing {
+    Tables {
+      customers
+      invoices
+      payments
+    }
+    Notes {
+      billing_note
+    }
+  }
+```
+
+A view can list four kinds of things. Each list is optional; `{ * }` means "all of them".
+
+| Block         | Contains                                                      |
+| ------------- | ------------------------------------------------------------- |
+| `Tables`      | Tables by name (`orders`, or `core.audit_events` in a schema) |
+| `Notes`       | Sticky notes by name                                          |
+| `TableGroups` | Every table of these groups                                   |
+| `Schemas`     | Every table of these schemas                                  |
+
+Refs are shown when both of their tables are in the view. A view with no blocks is empty. A file
+can declare as many views as you like.
+
+## Opening a diagram in a view
+
+The schema below declares two views, `billing` and `catalog`. With a fence, add `view="billing"`
+to its meta string:
+
+````md
+```dbml view="billing" title="Billing" id="billing-fence"
+Table customers { ... }
+...
+DiagramView billing {
+  Tables {
+    customers
+    invoices
+    payments
+  }
+  Notes {
+    billing_note
+  }
+}
+```
+````
+
+```dbml view="billing" title="Billing" height=380 id="billing-fence"
+Table customers {
+  id integer [pk]
+  email varchar [unique]
+}
+
+Table invoices {
+  id integer [pk]
+  customer_id integer [ref: > customers.id]
+  total decimal(10,2)
+}
+
+Table payments {
+  id integer [pk]
+  invoice_id integer [ref: > invoices.id]
+  amount decimal(10,2)
+}
+
+Table orders {
+  id integer [pk]
+  customer_id integer [ref: > customers.id]
+}
+
+Note billing_note {
+  'Invoices are issued when an order ships.'
+}
+
+DiagramView billing {
+Tables {
+  customers
+  invoices
+  payments
+}
+Notes {
+  billing_note
+}
+}
+```
+
+With the component, pass `view`:
+
+```mdx
+<DbmlDiagram value={shop} view="billing" title="Billing" />
+```
+
+<DbmlDiagram value={shop} view="billing" title="Billing view" height={400} id="billing-view" />
+
+The toolbar's **view menu** switches between the views; **All tables** is the whole schema. A
+`view` the DBML does not declare falls back to every table.
+
+## A layout per view
+
+Every view has its own table positions in the [layout file](./layout-file.md): `views["*"]` is the
+whole diagram, `views.billing` the `billing` view. A table placed in `"*"` but not in a view keeps
+its `"*"` position there, so you only store what differs. In the [editor](./editor.md), moving a
+table while a view is open saves it for that view.
+
+```json title="shop.dbml.layout.json"
+{
+  "version": 1,
+  "views": {
+    "*": { "nodes": { "public.customers": { "x": 0, "y": 140 }, "...": {} } },
+    "billing": {
+      "nodes": {
+        "public.customers": { "x": 0, "y": 0 },
+        "public.invoices": { "x": 0, "y": 200 },
+        "public.payments": { "x": 300, "y": 200 },
+        "note:billing_note": { "x": 300, "y": 20 }
+      }
+    }
+  }
+}
+```
+
+The same schema with that layout: the whole diagram first, then the `billing` view, each with its
+own arrangement. Switch the view in the toolbar of either one to compare.
+
+<DbmlDiagram value={shop} layout={shopLayout} title="All tables" height={460} id="shop-all" />
+
+<DbmlDiagram
+  value={shop}
+  layout={shopLayout}
+  view="billing"
+  title="Billing, own layout"
+  height={400}
+  id="shop-billing"
+/>
+
+## Linking to a view
+
+A link can open a diagram in a view: add `&view=<name>` after the diagram's anchor, for example
+
+<a href="#shop-all&view=catalog" data-noBrokenLinkCheck>
+  `#shop-all&view=catalog`
+</a>
+. See [deep links](./exploring.mdx#deep-links) for everything a link can carry.
+
+## Managing views in the editor
+
+The editor's view menu lists every view (with a filter field once there are more than seven) and
+creates, edits and deletes them: **New view from selection**, **Edit view…** (tables by schema,
+groups, notes, schemas, or "All tables"), **Delete view…**. The table menu has **Add to view** and
+**Remove from view**. Every change is written into the `DiagramView` block of your DBML, leaving
+the rest of the file untouched. See [the editor](./editor.md#views).

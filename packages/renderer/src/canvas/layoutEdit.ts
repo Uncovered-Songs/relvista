@@ -15,6 +15,11 @@ import {
 } from '@relvista/core';
 import type { NodeSettings } from './types.js';
 
+/**
+ * A node position in diagram units.
+ *
+ * @inline
+ */
 type Pos = { x: number; y: number };
 
 function setOwn<T>(obj: Record<string, T>, key: string, value: T): void {
@@ -117,6 +122,69 @@ export function setNodeSettings(
     setOwn(nodes, id, entry);
   }
   return next;
+}
+
+/** A node size written by a resize: `w`/`h`, and the new top-left when it moved. */
+export interface NodeSize {
+  w: number;
+  h: number;
+  x?: number;
+  y?: number;
+}
+
+/**
+ * Writes sizes (rounded to integers, at least 1) into `view`, keeping the other fields of each
+ * entry; `x`/`y` are written too when given (a resize from the top or left edge). In the default
+ * view an entry without a position gets `fallback[id]` (the drawn position), or is skipped.
+ */
+export function setNodeSizes(
+  layout: Layout | null,
+  view: string,
+  sizes: Record<string, NodeSize>,
+  fallback?: Record<string, Pos>,
+): Layout {
+  const { next, nodes } = editView(layout, view);
+  const named = view !== DEFAULT_VIEW;
+  for (const [id, s] of Object.entries(sizes)) {
+    if (!Number.isFinite(s.w) || !Number.isFinite(s.h)) continue;
+    let entry: NodeOverride = { ...own(nodes, id) };
+    const moved =
+      s.x !== undefined && s.y !== undefined && Number.isFinite(s.x) && Number.isFinite(s.y);
+    if (moved) entry = { ...entry, x: px(s.x!), y: px(s.y!) };
+    else if (!named && !hasPosition(entry)) {
+      const p = own(fallback, id);
+      if (!p || !Number.isFinite(p.x) || !Number.isFinite(p.y)) continue;
+      entry = { ...entry, x: px(p.x), y: px(p.y) };
+    }
+    entry.w = Math.max(1, px(s.w));
+    entry.h = Math.max(1, px(s.h));
+    setOwn(nodes, id, entry);
+  }
+  return next;
+}
+
+/**
+ * Collapses (`true`) or expands groups (`group:<name>` ids) in `view`. Collapsing writes
+ * `collapsed: true` and the group's current box position `boxes[id]` (rounded), so the collapsed
+ * box stays where the group was; expanding removes `collapsed` (an explicit `false` in a named view
+ * whose default view collapses it) and leaves `x`/`y`, which an expanded group ignores.
+ */
+export function setGroupsCollapsed(
+  layout: Layout | null,
+  view: string,
+  ids: readonly string[],
+  collapsed: boolean,
+  boxes: Record<string, Pos>,
+): Layout {
+  // Expanding writes no position: a group that never had an entry gets none.
+  if (!collapsed) return setNodeSettings(layout, view, ids, { collapsed: false });
+  const positions: Record<string, Pos> = {};
+  for (const id of ids) {
+    const b = own(boxes, id);
+    if (b && Number.isFinite(b.x) && Number.isFinite(b.y)) setOwn(positions, id, b);
+  }
+  const placed = setNodePositions(layout, view, positions);
+  return setNodeSettings(placed, view, ids, { collapsed: true }, boxes);
 }
 
 /** The effective entry of one node in a view (merged), or undefined. */

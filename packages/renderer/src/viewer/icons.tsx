@@ -85,3 +85,50 @@ export const ChevronIcon = () => (
     <path d="m4.5 6.5 3.5 3.5 3.5-3.5" />
   </Icon>
 );
+export const SearchIcon = () => (
+  <Icon>
+    <circle cx="7" cy="7" r="4.5" />
+    <path d="M10.5 10.5 14 14" />
+  </Icon>
+);
+/** Detail level: rows of a table. */
+export const RowsIcon = () => (
+  <Icon>
+    <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+    <path d="M2 6h12M5 8.75h6M5 11h4" />
+  </Icon>
+);
+export const LinkIcon = () => (
+  <Icon>
+    <path d="M6.75 9.25a2.5 2.5 0 0 0 3.54 0l2.47-2.47a2.5 2.5 0 0 0-3.54-3.54l-.9.9" />
+    <path d="M9.25 6.75a2.5 2.5 0 0 0-3.54 0L3.24 9.22a2.5 2.5 0 0 0 3.54 3.54l.9-.9" />
+  </Icon>
+);
+/** Path between two tables. */
+export const RouteIcon = () => (
+  <Icon>
+    <circle cx="3.5" cy="12.5" r="1.75" />
+    <circle cx="12.5" cy="3.5" r="1.75" />
+    <path d="M5.25 12.5h4a2.25 2.25 0 0 0 0-4.5h-2.5a2.25 2.25 0 0 1 0-4.5h4" />
+  </Icon>
+);
+export const MinusIcon = () => (
+  <Icon>
+    <path d="M4 8h8" />
+  </Icon>
+);
+export const PlusIcon = () => (
+  <Icon>
+    <path d="M4 8h8M8 4v8" />
+  </Icon>
+);
+export const SwapIcon = () => (
+  <Icon>
+    <path d="M5 2.5v11M2.5 5 5 2.5 7.5 5M11 13.5v-11M8.5 11l2.5 2.5 2.5-2.5" />
+  </Icon>
+);
+export const CheckIcon = () => (
+  <Icon>
+    <path d="m3.5 8.5 3 3 6-7" />
+  </Icon>
+);

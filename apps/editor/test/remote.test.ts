@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   RemoteError,
   fetchBytes,
+  gitHubFile,
+  withGitRef,
   normalizeRemoteUrl,
   readLayoutParam,
   readUrlParam,
@@ -17,6 +19,11 @@ describe('normalizeRemoteUrl', () => {
     );
     expect(normalizeRemoteUrl('https://github.com/o/r/raw/v1.2/a.dbml')).toBe(
       'https://raw.githubusercontent.com/o/r/v1.2/a.dbml',
+    );
+  });
+  it('rewrites GitHub tree URLs of a file to raw too', () => {
+    expect(normalizeRemoteUrl('https://github.com/o/r/tree/dev/db/schema.dbml')).toBe(
+      'https://raw.githubusercontent.com/o/r/dev/db/schema.dbml',
     );
   });
   it('keeps other https URLs', () => {
@@ -122,5 +129,36 @@ describe('fetchBytes', () => {
         },
       }),
     ).rejects.toThrow(/CORS/);
+  });
+});
+
+describe('GitHub files and Git refs (Compare…)', () => {
+  it('parses owner, repo, ref and path from every GitHub form', () => {
+    const want = { owner: 'o', repo: 'r', ref: 'main', path: 'db/schema.dbml' };
+    for (const u of [
+      'https://github.com/o/r/blob/main/db/schema.dbml',
+      'https://github.com/o/r/tree/main/db/schema.dbml',
+      'https://github.com/o/r/raw/main/db/schema.dbml',
+      'https://raw.githubusercontent.com/o/r/main/db/schema.dbml',
+    ])
+      expect(gitHubFile(u)).toEqual(want);
+    expect(gitHubFile('https://raw.githubusercontent.com/o/r/refs/tags/v1/a.dbml')).toEqual({
+      owner: 'o',
+      repo: 'r',
+      ref: 'refs/tags/v1',
+      path: 'a.dbml',
+    });
+    expect(gitHubFile('https://example.com/o/r/main/a.dbml')).toBeNull();
+    expect(gitHubFile('https://raw.githubusercontent.com/o/r/main')).toBeNull();
+    expect(gitHubFile('not a url')).toBeNull();
+  });
+  it('rewrites the ref segment only', () => {
+    expect(withGitRef('https://github.com/o/r/blob/main/db/schema.dbml', 'v2')).toBe(
+      'https://raw.githubusercontent.com/o/r/v2/db/schema.dbml',
+    );
+    expect(() => withGitRef('https://example.com/a.dbml', 'main')).toThrow(RemoteError);
+    expect(() => withGitRef('https://github.com/o/r/blob/main/a.dbml', 'a..b')).toThrow(
+      RemoteError,
+    );
   });
 });

@@ -14,7 +14,8 @@ export interface SharePayload {
   view?: string | null;
 }
 
-export const DEFAULT_EDITOR_URL = 'https://uncovered-songs.github.io/relvista/editor/';
+/** The hosted relvista editor, the default target of "Open in editor" links. */
+export const DEFAULT_EDITOR_URL = 'https://relvista.github.io/relvista/editor/';
 
 /** Bytes per `String.fromCharCode(...chunk)` call (stays under engines' argument limits). */
 const CHUNK = 0x8000;
@@ -110,7 +111,19 @@ function stripBom(text: string): string {
   return text.charCodeAt(0) === 0xfeff ? text.slice(1) : text;
 }
 
-/** Hash body without '#': "dbml=<b64u>[&layout=<b64u>][&view=<enc>]", keys in this order. */
+/**
+ * Hash body without '#': "dbml=<b64u>[&layout=<b64u>][&view=<enc>]", keys in this order.
+ *
+ * @example
+ * ```ts
+ * import { decodeShareHash, encodeShareHash } from '@relvista/renderer';
+ *
+ * const hash = await encodeShareHash({ dbml: source, view: 'billing' });
+ * const url = `https://relvista.github.io/relvista/editor/#${hash}`;
+ * // … and back:
+ * const payload = await decodeShareHash(new URL(url).hash);
+ * ```
+ */
 export async function encodeShareHash(payload: SharePayload): Promise<string> {
   let out = `dbml=${await deflateToBase64Url(stripBom(payload.dbml))}`;
   if (payload.layout) out += `&layout=${await deflateToBase64Url(serializeLayout(payload.layout))}`;

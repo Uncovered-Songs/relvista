@@ -134,3 +134,54 @@ for (const ex of singleExamples()) {
     });
   }
 }
+
+// Phase 3 (design §11): a canvas edit undone by its inverse leaves the bytes alone. Create a sticky
+// note (toolbar button), delete it (Delete key), Save as → the original bytes.
+async function addAndDeleteNote(page: Page): Promise<void> {
+  const before = await page.locator('.react-flow__node[data-id^="note:"]').count();
+  await page.getByRole('button', { name: 'Note', exact: true }).click();
+  const editor = page.getByRole('textbox', { name: /^Text of the note / });
+  await expect(editor).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(editor).toHaveCount(0);
+  await expect(page.locator('.react-flow__node[data-id^="note:"]')).toHaveCount(before + 1);
+  // Escape gives focus back to the new note: Delete removes it.
+  await expect(page.locator('.react-flow__node[data-id^="note:"]:focus')).toHaveCount(1);
+  await page.keyboard.press('Delete');
+  await expect(page.locator('.react-flow__node[data-id^="note:"]')).toHaveCount(before);
+}
+
+for (const ex of singleExamples()) {
+  for (const variant of ['as is', 'BOM+CRLF'] as const) {
+    test(`FSA ${ex.name} × ${variant}: create note + delete note → bytes identical`, async ({
+      page,
+    }) => {
+      await page.addInitScript(installFsMock, 'fsa');
+      await openEditor(page);
+      const bytes = VARIANTS[variant]!(ex.text);
+      await seed(page, `in/${ex.name}`, bytes);
+      await openViaPicker(page, `in/${ex.name}`, ex.name);
+      await addAndDeleteNote(page);
+      await expect(page.locator('.ed-filename__dot')).toHaveCount(0);
+      await saveAs(page, `out/${ex.name}`);
+      expect(await read(page, `out/${ex.name}`)).toEqual(bytes);
+    });
+  }
+}
+
+test('FSA 12-modules: create note + delete note → every file unchanged', async ({ page }) => {
+  await page.addInitScript(installFsMock, 'fsa');
+  await openEditor(page);
+  const files = folderExample('12-modules');
+  for (const [p, b] of Object.entries(files)) await seed(page, `proj/${p}`, b);
+  await page.evaluate(() => (window.__fsMock.nextDirectory = 'proj'));
+  await page.getByRole('button', { name: 'Open', exact: true }).click();
+  await page.getByRole('menuitem', { name: /Open folder/ }).click();
+  await expect(page.locator('.ed-filename__name')).toHaveText('main.dbml');
+  await diagramReady(page);
+  await addAndDeleteNote(page);
+  await page.keyboard.press('ControlOrMeta+s');
+  await page.waitForTimeout(200);
+  expect((await writes(page)).filter((w) => w.endsWith('.dbml'))).toEqual([]);
+  for (const [p, b] of Object.entries(files)) expect(await read(page, `proj/${p}`)).toEqual(b);
+});

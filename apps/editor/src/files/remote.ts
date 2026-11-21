@@ -1,4 +1,7 @@
-/** `?url=` remote files: URL checks, GitHub blob → raw rewrite, fetch with a size cap. */
+/**
+ * `?url=` remote files: URL checks, GitHub blob / tree → raw rewrite, Git ref rewrite (Compare…),
+ * fetch with a size cap.
+ */
 import { LIMITS, formatBytes } from './limits.js';
 
 export class RemoteError extends Error {
@@ -13,7 +16,8 @@ export class RemoteError extends Error {
 
 /**
  * Validates and normalises a user URL: only `https:` (and `http://localhost` / 127.0.0.1 for dev);
- * GitHub `blob` URLs become `raw.githubusercontent.com`. Throws RemoteError.
+ * GitHub `blob`, `tree` and `raw` URLs of a file become `raw.githubusercontent.com`. Throws
+ * RemoteError.
  */
 export function normalizeRemoteUrl(input: string): string {
   let u: URL;
@@ -27,7 +31,7 @@ export function normalizeRemoteUrl(input: string): string {
     throw new RemoteError('Only https:// URLs can be opened.', input);
   }
   if (u.hostname === 'github.com') {
-    const m = /^\/([^/]+)\/([^/]+)\/(?:blob|raw)\/(.+)$/.exec(u.pathname);
+    const m = /^\/([^/]+)\/([^/]+)\/(?:blob|tree|raw)\/(.+)$/.exec(u.pathname);
     if (m) return `https://raw.githubusercontent.com/${m[1]}/${m[2]}/${m[3]}`;
   }
   return u.toString();
@@ -147,4 +151,53 @@ export function remoteLayoutUrl(fileUrl: string, layout: RemoteLayout): string |
     throw new RemoteError('The layout URL is not valid.', layout.url);
   }
   return normalizeRemoteUrl(resolved);
+}
+
+/** A file on raw.githubusercontent.com: `<owner>/<repo>/<ref>/<path>`. */
+export interface GitHubFile {
+  owner: string;
+  repo: string;
+  /** Branch, tag or commit (`refs/heads/x` and `refs/tags/x` kept as written). */
+  ref: string;
+  /** Path inside the repository, still percent-encoded as in the URL. */
+  path: string;
+}
+
+/**
+ * The parts of a GitHub file URL (any form `normalizeRemoteUrl` accepts), or null for other URLs.
+ * The ref is one path segment (a branch with `/` in its name cannot be told from a folder), or
+ * three for `refs/heads/<x>` / `refs/tags/<x>`.
+ */
+export function gitHubFile(url: string): GitHubFile | null {
+  let raw: string;
+  try {
+    raw = normalizeRemoteUrl(url);
+  } catch {
+    return null;
+  }
+  const u = new URL(raw);
+  if (u.hostname !== 'raw.githubusercontent.com') return null;
+  const seg = u.pathname.split('/').filter(Boolean);
+  if (seg.length < 4) return null;
+  const [owner, repo, ...rest] = seg as [string, string, ...string[]];
+  const n = rest[0] === 'refs' && (rest[1] === 'heads' || rest[1] === 'tags') ? 3 : 1;
+  if (rest.length <= n) return null;
+  return { owner, repo, ref: rest.slice(0, n).join('/'), path: rest.slice(n).join('/') };
+}
+
+/**
+ * The raw URL of the same file at another Git ref (branch, tag or commit; may contain `/`).
+ * Throws RemoteError when `url` is not a GitHub file or the ref is empty or unsafe.
+ */
+export function withGitRef(url: string, ref: string): string {
+  const file = gitHubFile(url);
+  if (!file) throw new RemoteError('Git refs work for files opened from GitHub.', url);
+  const r = ref.trim();
+  if (!r || /[\s?#\\]|\.\.|^\/|\/$|\/\//.test(r))
+    throw new RemoteError('This is not a valid branch, tag or commit.', ref);
+  const encoded = r
+    .split('/')
+    .map((s) => encodeURIComponent(s))
+    .join('/');
+  return `https://raw.githubusercontent.com/${file.owner}/${file.repo}/${encoded}/${file.path}`;
 }

@@ -1,5 +1,6 @@
 import {
   estimateTextWidth,
+  tableTitle,
   type DetailLevel,
   type DiagramGeometry,
   type DiagramModel,
@@ -7,21 +8,36 @@ import {
 } from '@relvista/core';
 import { useMemo, type CSSProperties, type ReactElement } from 'react';
 import { colorResolver, type ColorMode, type PaletteOverrides } from '../theme.js';
+import { CollapsedGroupSvg } from './CollapsedGroupSvg.js';
+import { mergeRefs, mergedMarkers, primaryRef } from './collapsed.js';
 import { ColorContext, useColors } from './context.js';
+import {
+  badgeOf,
+  columnTonesOf,
+  dimmedByDecorations,
+  nodeTone,
+  refTone,
+  type Decorations,
+} from './decorations.js';
 import { GroupSvg } from './GroupSvg.js';
 import { NoteSvg } from './NoteSvg.js';
 import { RefSvg } from './RefSvg.js';
-import { highlightSets, routeAll, type EdgeStyle } from './routing.js';
+import { highlightSets, routeAll, type EdgeStyle, type RefRoute } from './routing.js';
 import { TableSvg } from './TableSvg.js';
 
+/** Props of `DiagramSvg`. */
 export interface DiagramSvgProps {
   /** View-filtered model (`selectView`). */
   model: DiagramModel;
+  /** Where everything is drawn (`layoutDiagram` / `layoutDiagramSync`). */
   geometry: DiagramGeometry;
+  /** Light or dark palette. Default `light`. */
   colorMode?: ColorMode;
+  /** Which columns tables show. Default `all`. */
   detailLevel?: DetailLevel;
   /** Table, note or ref ids to emphasise; everything not related to them is dimmed. */
   highlight?: readonly string[] | null;
+  /** How refs are drawn. Default `orthogonal`. */
   edgeStyle?: EdgeStyle;
   /** Space around the diagram bounds, in diagram units. Default 24. */
   padding?: number;
@@ -31,8 +47,11 @@ export interface DiagramSvgProps {
   title?: string;
   /** `width`/`height` attributes; default the diagram size in px. Pass '100%' to fill a box. */
   width?: number | string;
+  /** See `width`. */
   height?: number | string;
+  /** Class of the `<svg>` element. */
   className?: string;
+  /** Inline style of the `<svg>` element. */
   style?: CSSProperties;
   /** Prefix for ids inside the SVG (filters). Default `rv`. */
   idPrefix?: string;
@@ -45,7 +64,15 @@ export interface DiagramSvgProps {
   palette?: PaletteOverrides | null;
   /** Draw a card shadow (default true). */
   shadows?: boolean;
+  /**
+   * Text measurement; use the one the geometry was laid out with. Default: the built-in
+   * width estimate.
+   */
   measure?: TextMeasure;
+  /** Search hits, paths, focus and diff tones (§4.2). */
+  decorations?: Decorations | null;
+  /** Precomputed ref routes keyed by ref id (default: `routeAll` of this model and geometry). */
+  routes?: ReadonlyMap<string, RefRoute> | null;
 }
 
 /** The whole diagram as pure, SSR-safe SVG (no browser APIs). */
@@ -78,13 +105,37 @@ function DiagramSvgInner({
   idPrefix = 'rv',
   shadows = true,
   measure = estimateTextWidth,
+  decorations,
+  routes: givenRoutes,
 }: DiagramSvgProps): ReactElement {
   const { c } = useColors();
+  // `routeAll`'s default `avoid: 'tables'`: lines go round unrelated tables (§4.1).
   const routes = useMemo(
-    () => routeAll({ model, geometry, detailLevel, edgeStyle }),
-    [model, geometry, detailLevel, edgeStyle],
+    () => givenRoutes ?? routeAll({ model, geometry, detailLevel, edgeStyle }),
+    [givenRoutes, model, geometry, detailLevel, edgeStyle],
   );
-  const lit = useMemo(() => highlightSets(model, highlight), [model, highlight]);
+  // A collapsed group in the highlight stands for its member tables.
+  const expandedHighlight = useMemo(() => {
+    if (!highlight) return highlight;
+    const out: string[] = [];
+    for (const id of highlight) {
+      out.push(id);
+      const g = geometry.groups[id]?.collapsed ? model.groups.find((x) => x.id === id) : undefined;
+      if (g) out.push(...g.tableIds);
+    }
+    return out;
+  }, [model, geometry, highlight]);
+  const lit = useMemo(() => highlightSets(model, expandedHighlight), [model, expandedHighlight]);
+  // One line per pair of display nodes (merged refs of collapsed groups); inactive lines first,
+  // so active refs draw over them.
+  const lines = useMemo(() => {
+    const drawn = mergeRefs(model, geometry).flatMap((line) => {
+      const p = primaryRef(line, routes);
+      return p ? [{ line, ...p, inactive: line.refs.every((r) => r.inactive) }] : [];
+    });
+    return [...drawn.filter((d) => d.inactive), ...drawn.filter((d) => !d.inactive)];
+  }, [model, geometry, routes]);
+  const tablesById = useMemo(() => new Map(model.tables.map((t) => [t.id, t])), [model]);
   const b = geometry.bounds;
   const vbW = Math.max(1, (Number.isFinite(b.width) ? b.width : 0) + padding * 2);
   const vbH = Math.max(1, (Number.isFinite(b.height) ? b.height : 0) + padding * 2);
@@ -131,9 +182,20 @@ function DiagramSvgInner({
       <g className="rv-groups">
         {model.groups.map((g) => {
           const box = geometry.groups[g.id];
-          if (!box) return null;
-          const dim = lit ? !g.tableIds.some((t) => lit.tables.has(t)) : false;
-          return <GroupSvg key={g.id} group={g} box={box} dimmed={dim} />;
+          if (!box || box.collapsed) return null;
+          const dim =
+            (lit ? !g.tableIds.some((t) => lit.tables.has(t)) : false) ||
+            dimmedByDecorations(decorations, g.id);
+          return (
+            <GroupSvg
+              key={g.id}
+              group={g}
+              box={box}
+              dimmed={dim}
+              tone={nodeTone(decorations, g.id)}
+              badge={badgeOf(decorations, g.id)}
+            />
+          );
         })}
       </g>
       <g className="rv-notes">
@@ -145,19 +207,63 @@ function DiagramSvgInner({
               key={n.id}
               note={n}
               box={box}
-              dimmed={lit ? !lit.tables.has(n.id) : false}
+              dimmed={
+                (lit ? !lit.tables.has(n.id) : false) || dimmedByDecorations(decorations, n.id)
+              }
               shadowFilter={shadowId}
               measure={measure}
+              idPrefix={idPrefix}
+              tone={nodeTone(decorations, n.id)}
+              badge={badgeOf(decorations, n.id)}
             />
           );
         })}
       </g>
       <g className="rv-refs">
-        {model.refs.map((r) => {
-          const route = routes.get(r.id);
-          if (!route) return null;
-          const state = lit ? (lit.refs.has(r.id) ? 'highlight' : 'dim') : 'normal';
-          return <RefSvg key={r.id} refModel={r} route={route} state={state} />;
+        {lines.map(({ line, ref, route }) => {
+          const ids = line.refs.map((r) => r.id);
+          const state = lit ? (ids.some((id) => lit.refs.has(id)) ? 'highlight' : 'dim') : 'normal';
+          const tone = ids.map((id) => refTone(decorations, id)).find((t) => t !== undefined);
+          return (
+            <RefSvg
+              key={line.id}
+              refModel={ref}
+              route={route}
+              state={state}
+              tone={tone}
+              dimmed={!!decorations?.dimOthers && tone === undefined}
+              merged={
+                line.refs.length > 1 ? { refs: line.refs, ...mergedMarkers(line, ref) } : null
+              }
+            />
+          );
+        })}
+      </g>
+      <g className="rv-collapsed-groups">
+        {model.groups.map((g) => {
+          const box = geometry.groups[g.id];
+          if (!box?.collapsed) return null;
+          const members = g.tableIds.flatMap((id) => {
+            const t = tablesById.get(id);
+            return t ? [tableTitle(t)] : [];
+          });
+          return (
+            <CollapsedGroupSvg
+              key={g.id}
+              group={g}
+              box={box}
+              memberNames={members}
+              dimmed={
+                (lit ? !g.tableIds.some((t) => lit.tables.has(t)) : false) ||
+                dimmedByDecorations(decorations, g.id)
+              }
+              highlighted={!!highlight?.includes(g.id)}
+              shadowFilter={shadowId}
+              measure={measure}
+              tone={nodeTone(decorations, g.id)}
+              badge={badgeOf(decorations, g.id)}
+            />
+          );
         })}
       </g>
       <g className="rv-tables">
@@ -170,11 +276,16 @@ function DiagramSvgInner({
               table={t}
               box={box}
               detailLevel={box.detailLevel ?? detailLevel}
-              dimmed={lit ? !lit.tables.has(t.id) : false}
+              dimmed={
+                (lit ? !lit.tables.has(t.id) : false) || dimmedByDecorations(decorations, t.id)
+              }
               highlighted={lit ? (highlight?.includes(t.id) ?? false) : false}
               highlightColumns={lit?.columns.get(t.id) ?? null}
               shadowFilter={shadowId}
               measure={measure}
+              tone={nodeTone(decorations, t.id)}
+              columnTones={columnTonesOf(decorations, t.id)}
+              badge={badgeOf(decorations, t.id)}
             />
           );
         })}

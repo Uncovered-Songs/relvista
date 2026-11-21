@@ -34,6 +34,11 @@
   --rv-note-border: #ecd77a;
   --rv-note-text: #4a4022;
   --rv-selection: #2f6fed;
+  --rv-match: #0e7490;
+  --rv-path: #7c3aed;
+  --rv-diff-added: #15803d;
+  --rv-diff-removed: #dc2626;
+  --rv-diff-changed: #b45309;
 
   /* UI chrome (toolbar, cards, banners) */
   --rv-ui-bg: rgba(255, 255, 255, 0.96);
@@ -77,6 +82,11 @@
   --rv-note-border: #5e5130;
   --rv-note-text: #efe4bf;
   --rv-selection: #5b9bff;
+  --rv-match: #22d3ee;
+  --rv-path: #a78bfa;
+  --rv-diff-added: #4ade80;
+  --rv-diff-removed: #f87171;
+  --rv-diff-changed: #fbbf24;
 
   --rv-ui-bg: rgba(26, 31, 40, 0.96);
   --rv-ui-solid: #1a1f28;

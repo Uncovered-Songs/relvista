@@ -1,7 +1,7 @@
 ---
 sidebar_position: 2
 title: Usage
-description: Code fences, the DbmlDiagram component, .dbml files, layout files, views, fullscreen, export and print.
+description: Code fences, the DbmlDiagram component, .dbml files, layout files, views, anchors, the toolbar, export and print.
 ---
 
 import DbmlDiagram from '@theme/DbmlDiagram';
@@ -52,6 +52,8 @@ Table customers {
 | `source` | `source`                          | Adds **Diagram** / **Source** tabs so readers can see the DBML.      |
 | `detail` | `detail=keys`                     | `all` columns, `keys` only, or table `names` only.                   |
 | `static` | `static`                          | Show the fence as highlighted DBML code instead of a diagram.        |
+| `ssr`    | `ssr=false`                       | No build-time picture for this fence (see below).                    |
+| `id`     | `id="billing"`                    | The diagram's anchor: `#billing` links to it ([anchors](#anchors)).  |
 
 Values can be double-quoted, single-quoted or bare; a bare key is `true`.
 
@@ -95,6 +97,8 @@ import DbmlDiagram from '@theme/DbmlDiagram';
 | `toolbar`     | array of toolbar items           | Overrides `themeConfig.dbml.toolbar`.                                                         |
 | `editorUrl`   | `string`                         | Overrides `themeConfig.dbml.editorUrl`.                                                       |
 | `palette`     | `'site'` \| `'relvista'`         | Overrides `themeConfig.dbml.palette` ([colours](./colours.md)).                               |
+| `ssr`         | `boolean`                        | Overrides `themeConfig.dbml.ssr` ([build-time pictures](#build-time-pictures)).               |
+| `id`          | `string`                         | The diagram's anchor on the page ([anchors](#anchors)).                                       |
 | `className`   | `string`                         | Class on the diagram's wrapper, e.g. to override `--rv-*` variables for one diagram.          |
 
 ## `.dbml` files
@@ -184,22 +188,74 @@ and `view` picks the starting one:
 ```
 ````
 
-See the [diagram views example](./gallery/08-diagram-views.mdx).
+See [Diagram views](./views.mdx) for the syntax and per-view layouts, and the
+[diagram views example](./gallery/08-diagram-views.mdx).
 
 ## Toolbar: fullscreen, export and print
 
-Every diagram has a toolbar in its top-right corner:
+Every diagram has a toolbar in its top-right corner. Its buttons, in order, are the items of
+`themeConfig.dbml.toolbar` (or the `toolbar` prop) — all of them by default:
 
-- **View menu** — shown when the DBML declares `DiagramView`s.
-- **Zoom in / out** and **fit** — or use the scroll wheel, pinch and drag on the canvas.
-- **Fullscreen** — the diagram fills the screen; <kbd>Esc</kbd> leaves.
-- **Export** — download the diagram as **SVG** (vector, with embedded styles) or **PNG** (2× resolution).
-- **Print** — prints just the diagram, scaled to fit a landscape page.
-- **Open in editor** — when `editorUrl` is configured.
+| Item             | Button                                                                                                       |
+| ---------------- | ------------------------------------------------------------------------------------------------------------ |
+| `view`           | **View menu**, shown when the DBML declares `DiagramView`s.                                                  |
+| `search`         | **Search** tables, columns, enums, groups, notes and views, and the relationship path between two tables.    |
+| `detail`         | **Detail level**: all columns, keys only, or table names.                                                    |
+| `zoom`           | **Zoom in / out** — or use the scroll wheel, pinch and drag on the canvas.                                   |
+| `fit`            | **Fit to view**.                                                                                             |
+| `fullscreen`     | **Fullscreen** — the diagram fills the screen; <kbd>Esc</kbd> leaves.                                        |
+| `export`         | **Export**: **SVG** (vector, with embedded styles), **PNG** (2× resolution) or **PDF…** (tiled or per view). |
+| `print`          | **Print** just the diagram, scaled to fit a landscape page.                                                  |
+| `link`           | **Copy link to this diagram**, with what it shows ([anchors](#anchors)).                                     |
+| `open-in-editor` | **Open in editor** — shown when `editorUrl` is set (the hosted editor by default).                           |
+
+```js title="docusaurus.config.js"
+themeConfig: {
+  dbml: {
+    // A reading-only toolbar: no export, print or editor link.
+    toolbar: ['view', 'search', 'detail', 'zoom', 'fit', 'fullscreen', 'link'],
+  },
+},
+```
 
 Exports use the current colour mode, the colours and fonts the diagram shows and its detail level,
 and include tables you dragged where you left them. Prints use the same detail level and light
-colours.
+colours. See [Export and print](./export.md) for the PDF options, and
+[Exploring diagrams](./exploring.mdx) for search, paths, detail levels and focus.
+
+**Open in editor** carries the DBML, the layout file (when the diagram has one) and the view and
+table you are looking at; the positions computed at build time stay out of it, so the editor lays
+out a diagram without a layout file itself.
+
+## Anchors
+
+Every diagram's box has an `id`, its **anchor**: the `id` prop or fence meta, else `diagram-` and
+the title as a heading slug (`title="Billing"` → `#diagram-billing`, so a `## Billing` heading
+keeps `#billing`), else `diagram-` and a hash of its DBML and view.
+`#billing` scrolls to the diagram like a heading link, and keys after it open the diagram at a
+table, view, search or path: `#billing&table=invoices&view=finance`. The toolbar's link button
+copies such a link. See [deep links](./exploring.mdx#deep-links).
+
+## Schema diffs
+
+`<DbmlDiff old={v1} new={v2} />` and the ` ```dbml-diff ` fence draw what changed between two
+versions of a schema. See [Schema diff](./diff.mdx).
+
+## Build-time pictures
+
+`docusaurus build` lays out every diagram in Node and writes it into the page as a static SVG. It
+shows at once, without JavaScript, in print and to search engines; the interactive viewer then
+takes over with the same table positions, so the picture does not jump and the browser never runs
+the auto-layout for it.
+
+- `src` and `layout` paths are read from your `static/` directories at build time. Remote URLs
+  are not fetched during the build: those diagrams are drawn in the browser.
+- A diagram with errors shows its error box and the build prints a `[relvista] <page>: …` warning;
+  the build itself does not fail.
+- Turn it off with `themeConfig.dbml.ssr: false`, the `ssr={false}` prop, or `ssr=false` on a
+  fence.
+- Colour overrides written on `.rv-viewer` in `custom.css` do not reach the static picture; add
+  `.relvista-static-box` to the selector to colour both.
 
 ## Colours
 

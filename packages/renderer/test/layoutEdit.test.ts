@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   effectivePositions,
   nodeEntry,
+  setGroupsCollapsed,
   setNodePositions,
   setNodeSettings,
+  setNodeSizes,
 } from '../src/canvas/layoutEdit.js';
 
 function base(): Layout {
@@ -179,5 +181,84 @@ describe('setNodeSettings', () => {
     const next = setNodeSettings(null, 'v', ['public.a'], { collapsed: true });
     expect(next.views['v']).toEqual({ nodes: { 'public.a': { collapsed: true } } });
     valid(next);
+  });
+});
+
+describe('setNodeSizes (resize, phase 3)', () => {
+  it('writes integer w/h, keeps the other fields, and x/y only when given', () => {
+    const l = base();
+    const next = setNodeSizes(l, '*', { 'public.users': { w: 300.6, h: 99.4 } });
+    expect(next.views['*']!.nodes['public.users']).toEqual({
+      x: 10,
+      y: 20,
+      w: 301,
+      h: 99,
+      pinned: true,
+    });
+    const moved = setNodeSizes(l, '*', { 'public.posts': { w: 200, h: 80, x: 7.2, y: -3.7 } });
+    expect(moved.views['*']!.nodes['public.posts']).toEqual({
+      x: 7,
+      y: -4,
+      w: 200,
+      h: 80,
+      collapsed: true,
+    });
+    expect(l.views['*']!.nodes['public.users']!.w).toBe(240);
+    valid(next);
+    valid(moved);
+  });
+
+  it('needs a position in the default view (fallback), not in a named one', () => {
+    const l = base();
+    expect(setNodeSizes(l, '*', { 'note:n': { w: 150, h: 70 } }).views['*']!.nodes['note:n']).toBe(
+      undefined,
+    );
+    const withFallback = setNodeSizes(
+      l,
+      '*',
+      { 'note:n': { w: 150, h: 70 } },
+      { 'note:n': { x: 1.4, y: 2.6 } },
+    );
+    expect(withFallback.views['*']!.nodes['note:n']).toEqual({ x: 1, y: 3, w: 150, h: 70 });
+    const named = setNodeSizes(l, 'blog', { 'note:n': { w: 150, h: 70 } });
+    expect(named.views['blog']!.nodes['note:n']).toEqual({ w: 150, h: 70 });
+    valid(withFallback);
+    valid(named);
+  });
+
+  it('skips non-finite sizes', () => {
+    const l = base();
+    const next = setNodeSizes(l, '*', { 'public.users': { w: NaN, h: 10 } });
+    expect(next.views['*']!.nodes['public.users']).toEqual(l.views['*']!.nodes['public.users']);
+  });
+});
+
+describe('setGroupsCollapsed (phase 3)', () => {
+  it('collapsing writes collapsed and the rounded box position', () => {
+    const l = base();
+    const next = setGroupsCollapsed(l, '*', ['group:g'], true, { 'group:g': { x: 9.6, y: -0.4 } });
+    expect(next.views['*']!.nodes['group:g']).toEqual({ x: 10, y: 0, collapsed: true });
+    valid(next);
+    // Expanding removes `collapsed` and keeps the position.
+    const open = setGroupsCollapsed(next, '*', ['group:g'], false, {});
+    expect(open.views['*']!.nodes['group:g']).toEqual({ x: 10, y: 0 });
+    valid(open);
+  });
+
+  it('expanding a group without an entry writes nothing', () => {
+    const l = base();
+    const next = setGroupsCollapsed(l, '*', ['group:g'], false, { 'group:g': { x: 1, y: 2 } });
+    expect(next.views['*']!.nodes['group:g']).toBeUndefined();
+  });
+
+  it('named views get overrides; expanding there writes an explicit false', () => {
+    const l = setGroupsCollapsed(base(), '*', ['group:g'], true, { 'group:g': { x: 5, y: 5 } });
+    const named = setGroupsCollapsed(l, 'blog', ['group:g'], true, { 'group:g': { x: 50, y: 60 } });
+    expect(named.views['blog']!.nodes['group:g']).toEqual({ x: 50, y: 60, collapsed: true });
+    expect(named.views['*']).toBe(l.views['*']);
+    const open = setGroupsCollapsed(l, 'blog', ['group:g'], false, {});
+    expect(open.views['blog']!.nodes['group:g']).toEqual({ collapsed: false });
+    valid(named);
+    valid(open);
   });
 });

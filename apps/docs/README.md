@@ -1,7 +1,7 @@
 # relvista docs
 
 The **relvista** documentation site and live demo of `@relvista/docusaurus-plugin`, published at
-<https://uncovered-songs.github.io/relvista/> by `.github/workflows/deploy-docs.yml`.
+<https://relvista.github.io/relvista/> by `.github/workflows/deploy-docs.yml`.
 
 ```sh
 pnpm docs:start      # builds the packages, then the dev server

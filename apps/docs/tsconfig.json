@@ -10,6 +10,13 @@
       "@relvista/docusaurus-plugin/client"
     ]
   },
-  "include": ["src", "docusaurus.config.ts", "sidebars.ts", "playwright.config.ts", "e2e"],
+  "include": [
+    "src",
+    "docusaurus.config.ts",
+    "sidebars.ts",
+    "sidebars-api.ts",
+    "playwright.config.ts",
+    "e2e"
+  ],
   "exclude": [".docusaurus", "build"]
 }

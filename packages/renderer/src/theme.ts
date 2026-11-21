@@ -5,8 +5,10 @@
  */
 import { METRICS } from '@relvista/core';
 
+/** Light or dark colours. */
 export type ColorMode = 'light' | 'dark';
 
+/** Every colour (and the fonts) the renderer draws with, one value per key. */
 export interface Palette {
   canvasBg: string;
   gridDot: string;
@@ -31,8 +33,15 @@ export interface Palette {
   noteBorder: string;
   noteText: string;
   selection: string;
+  /** Decoration tones (§4.2 `Decorations`): search hits, FK paths, schema diff. */
+  match: string;
+  path: string;
+  diffAdded: string;
+  diffRemoved: string;
+  diffChanged: string;
 }
 
+/** relvista's built-in light and dark palettes (the `--rv-*` defaults in `styles.css`). */
 export const PALETTES: Record<ColorMode, Palette> = {
   light: {
     canvasBg: '#f6f7f9',
@@ -58,6 +67,11 @@ export const PALETTES: Record<ColorMode, Palette> = {
     noteBorder: '#ecd77a',
     noteText: '#4a4022',
     selection: '#2f6fed',
+    match: '#0e7490',
+    path: '#7c3aed',
+    diffAdded: '#15803d',
+    diffRemoved: '#dc2626',
+    diffChanged: '#b45309',
   },
   dark: {
     canvasBg: '#0f1217',
@@ -83,9 +97,15 @@ export const PALETTES: Record<ColorMode, Palette> = {
     noteBorder: '#5e5130',
     noteText: '#efe4bf',
     selection: '#5b9bff',
+    match: '#22d3ee',
+    path: '#a78bfa',
+    diffAdded: '#4ade80',
+    diffRemoved: '#f87171',
+    diffChanged: '#fbbf24',
   },
 };
 
+/** The name of one palette entry. */
 export type PaletteKey = keyof Palette;
 
 /** `canvasBg` → `--rv-canvas-bg`. */
@@ -117,7 +137,9 @@ export function paletteCss(mode: ColorMode, overrides?: PaletteOverrides): strin
  * value (standalone export, readable by tools without CSS variable support).
  */
 export interface ColorResolver {
+  /** The colour mode the resolver was made for. */
   mode: ColorMode;
+  /** How a component spells the colour of `key`: `var(--rv-…, fallback)` or the literal value. */
   c(key: PaletteKey): string;
   /** The literal colour behind `c(key)` (an override, else the palette's), for colour maths. */
   value(key: PaletteKey): string;
@@ -126,6 +148,10 @@ export interface ColorResolver {
   mono: string;
 }
 
+/**
+ * Makes a `ColorResolver` for a colour mode: CSS variables or literal colours, with optional
+ * overrides.
+ */
 export function colorResolver(
   mode: ColorMode,
   literal = false,
@@ -147,6 +173,7 @@ export function colorResolver(
 // ---------------------------------------------------------------------------------------------
 // Small colour helpers for user colours (headerColor, group/note/ref colours).
 
+/** A colour as 0–255 red, green and blue channels. */
 export interface Rgb {
   r: number;
   g: number;
@@ -178,6 +205,11 @@ export function parseHex(color: string | null | undefined): Rgb | null {
   };
 }
 
+/**
+ * Formats a colour as `#rrggbb`, clamping and rounding each channel.
+ *
+ * @param rgb - The colour channels.
+ */
 export function toHex({ r, g, b }: Rgb): string {
   const h = (n: number) =>
     Math.round(Math.min(255, Math.max(0, n)))
@@ -287,9 +319,18 @@ export function groupColors(
   };
 }
 
-/** Readable text colour on top of `bg`: near-white on dark colours, near-black on light ones. */
+const TEXT_DARK = '#1b2230';
+const TEXT_LIGHT = '#ffffff';
+
+/**
+ * Readable text colour on top of `bg`: white or near-black, whichever has the higher WCAG contrast
+ * ratio. The crossover sits near a relative luminance of 0.18, so medium colours such as
+ * `#79AD51` or `#e67e22` get dark text (about 6:1) instead of white (under 3:1).
+ */
 export function contrastText(bg: Rgb): string {
-  return relativeLuminance(bg) > 0.45 ? '#1b2230' : '#ffffff';
+  const dark = contrastRatio(bg, { r: 0x1b, g: 0x22, b: 0x30 });
+  const light = contrastRatio(bg, { r: 255, g: 255, b: 255 });
+  return dark > light ? TEXT_DARK : TEXT_LIGHT;
 }
 
 /** A user colour, validated: hex as given, CSS colour names and functions passed through. */

@@ -1,9 +1,17 @@
+import { mkdtempSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, sep } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 import type { Joi } from '@docusaurus/utils-validation';
 import type { LoadContext } from '@docusaurus/types';
-import { DEFAULT_EDITOR_URL as RENDERER_EDITOR_URL } from '@relvista/renderer';
+import {
+  DEFAULT_EDITOR_URL as RENDERER_EDITOR_URL,
+  DEFAULT_TOOLBAR as RENDERER_TOOLBAR,
+} from '@relvista/renderer';
 import pluginRelvista, {
   DEFAULT_THEME_CONFIG,
+  TOOLBAR_ITEMS,
   parseDbmlMeta,
   registrationProblem,
   validateThemeConfig,
@@ -62,6 +70,7 @@ describe('validateThemeConfig', () => {
       editorUrl: 'https://example.com/editor/',
       detailLevel: 'keys',
       palette: 'relvista',
+      ssr: false,
     };
     expect(validateThemeConfig({ validate, themeConfig: { dbml } as never })).toEqual({ dbml });
   });
@@ -78,6 +87,20 @@ describe('validateThemeConfig', () => {
     }
     expect(() =>
       validateThemeConfig({ validate, themeConfig: { dbml: { editorUrl: true } } as never }),
+    ).toThrow();
+  });
+
+  it('offers every viewer toolbar item, in the viewer order (search, detail, link too)', () => {
+    expect([...TOOLBAR_ITEMS]).toEqual(RENDERER_TOOLBAR);
+    expect(DEFAULT_THEME_CONFIG.dbml.toolbar).toEqual(RENDERER_TOOLBAR);
+    const toolbar = ['search', 'detail', 'link', 'zoom'];
+    const out = validateThemeConfig({ validate, themeConfig: { dbml: { toolbar } } as never });
+    expect(out.dbml.toolbar).toEqual(toolbar);
+    expect(() =>
+      validateThemeConfig({
+        validate,
+        themeConfig: { dbml: { toolbar: ['search', 'search'] } } as never,
+      }),
     ).toThrow();
   });
 
@@ -112,12 +135,15 @@ describe('pluginRelvista', () => {
     const modules = plugin.getClientModules?.() ?? [];
     expect(modules.some((m) => m.endsWith('styles.css'))).toBe(true);
     expect(modules.some((m) => /prism-dbml\.js$/.test(m))).toBe(true);
-    // The site palette overrides the renderer's palettes, so it loads after them.
+    // The site palette overrides the renderer's palettes and the static layer's dark palette, so
+    // it loads after them.
     const site = modules.findIndex((m) => /site-palette\.css$/.test(m));
-    expect(site).toBeGreaterThan(modules.findIndex((m) => m.endsWith('styles.css')));
+    const statik = modules.findIndex((m) => /client[/\\]static\.css$/.test(m));
+    expect(statik).toBeGreaterThan(modules.findIndex((m) => m.endsWith('styles.css')));
+    expect(site).toBeGreaterThan(statik);
     expect(
       pluginRelvista({ siteDir: '/s' } as LoadContext, { highlight: false }).getClientModules?.(),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   it('loads .dbml files as source text', () => {
@@ -137,6 +163,82 @@ describe('pluginRelvista', () => {
     const rule = config.module.rules.find((r) => r.resourceQuery)!;
     expect(rule.type).toBe('asset/resource');
     expect(rule.resourceQuery!.test('?relvista-worker')).toBe(true);
+  });
+
+  it('puts the theme code shared by page chunks into one chunk (client only)', () => {
+    type Group = {
+      name: string;
+      chunks: string;
+      minChunks: number;
+      minSize: number;
+      priority: number;
+      test(m: { resource?: string }): boolean;
+    };
+    type Cfg = { optimization?: { splitChunks: { cacheGroups: Record<string, Group> } } };
+    const client = plugin.configureWebpack?.({} as never, false, {} as never, {} as never) as Cfg;
+    const group = client.optimization!.splitChunks.cacheGroups.relvistaTheme!;
+    expect(group).toMatchObject({ name: 'relvista-theme', chunks: 'async', minChunks: 2 });
+    expect(group.minSize).toBe(0);
+    // Between Docusaurus' `common` (40) and `styles` (50) groups.
+    expect(group.priority).toBeGreaterThan(40);
+    expect(group.priority).toBeLessThan(50);
+    const lib = join(dirname(fileURLToPath(import.meta.url)), '..', 'src');
+    const theme = join(lib, 'theme', 'DbmlDiagram', 'index.js');
+    // The test runs from src/ (the plugin's own directory): its modules match, others do not.
+    expect(group.test({ resource: theme })).toBe(true);
+    expect(group.test({ resource: `${lib}-other${sep}theme.js` })).toBe(false);
+    expect(group.test({ resource: '/x/node_modules/react/index.js' })).toBe(false);
+    expect(group.test({})).toBe(false);
+    const context = {
+      siteDir: '/site',
+      generatedFilesDir: mkdtempSync(join(tmpdir(), 'relvista-gen-')),
+      baseUrl: '/',
+      siteConfig: { staticDirectories: ['static'] },
+    } as unknown as LoadContext;
+    const server = pluginRelvista(context).configureWebpack?.(
+      {} as never,
+      true,
+      {} as never,
+      {} as never,
+    ) as Cfg;
+    expect(server.optimization).toBeUndefined();
+  });
+
+  it('aliases relvista-ssr-files: a generated server module, a client stub', () => {
+    const generatedFilesDir = mkdtempSync(join(tmpdir(), 'relvista-gen-'));
+    const context = {
+      siteDir: '/site',
+      generatedFilesDir,
+      baseUrl: '/docs/',
+      siteConfig: { staticDirectories: ['static', 'public'] },
+    } as unknown as LoadContext;
+    type Resolve = { resolve: { alias: Record<string, string | false> } };
+    const p = pluginRelvista(context);
+    const client = p.configureWebpack?.({} as never, false, {} as never, {} as never) as Resolve;
+    expect(client.resolve.alias['relvista-ssr-files$']).toMatch(/ssr[/\\]client\.js$/);
+    const server = p.configureWebpack?.({} as never, true, {} as never, {} as never) as Resolve;
+    const file = server.resolve.alias['relvista-ssr-files$'] as string;
+    expect(file.startsWith(generatedFilesDir)).toBe(true);
+    const code = readFileSync(file, 'utf8');
+    expect(code).toMatch(/import \{ createSsrBackend \} from ".*ssr[/\\]+server\.js";/);
+    expect(code).toContain('"staticDirectories":["static","public"]');
+    expect(code).toContain('"baseUrl":"/docs/"');
+    expect(code).toContain('"siteDir":"/site"');
+  });
+
+  it("never bundles jsPDF's optional dependencies, and only drops them for jsPDF", () => {
+    const config = plugin.configureWebpack?.({} as never, false, {} as never, {} as never) as {
+      module: { rules: Array<{ test?: RegExp; resolve?: { alias: Record<string, unknown> } }> };
+      resolve: { alias: Record<string, unknown> };
+    };
+    const rule = config.module.rules.find((r) => r.resolve)!;
+    expect(rule.test!.test('/x/node_modules/jspdf/dist/jspdf.es.min.js')).toBe(true);
+    expect(rule.test!.test('/x/node_modules/mermaid/dist/mermaid.js')).toBe(false);
+    for (const name of ['html2canvas', 'canvg', 'dompurify']) {
+      expect(rule.resolve!.alias[name]).toBe(false);
+      // Mermaid and other plugins use DOMPurify: never aliased site-wide.
+      expect(config.resolve.alias[name]).toBeUndefined();
+    }
   });
 
   it('watches .dbml files in the site', () => {

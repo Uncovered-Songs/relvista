@@ -18,12 +18,22 @@ your machine.
 - **Diagram:** updates as you type and keeps the last valid diagram while the code has an error.
   Drag tables, sticky notes and whole table groups; Shift+click or Shift+drag to select several;
   pin or collapse a table from its context menu; auto-layout everything that is not pinned.
-  Click a table to jump to its code; put the cursor in a block to highlight its node.
-- **Views:** every `DiagramView` in the file has its own layout. Pick one in the toolbar.
-- **Export:** SVG, PNG, print / PDF, the DBML file, the layout JSON, and SQL for PostgreSQL,
-  MySQL, SQL Server and Oracle. **New ▸ From SQL** imports a SQL schema.
+  Click a table to jump to its code; put the cursor in a block to highlight its node. Refs are
+  routed around the tables in their way.
+- **Edit on the canvas:** add and write [sticky notes](#sticky-notes), set
+  [colours](#colours-and-inactive-refs), mark refs inactive, collapse
+  [table groups](#collapsing-groups) and manage [views](#views) without touching the code — each
+  change is written into your DBML, and only the bytes of what you changed move.
+- **Explore:** [search, relationship paths, detail levels and focus](#search-path-and-focus), and
+  [deep links](#deep-links) to any of them.
+- **Compare** the document with another version: a [schema diff](#compare) on the diagram and in
+  the code.
+- **Export:** SVG, PNG, a [tiled or per-view PDF](#export), print, the DBML file, the layout JSON,
+  and SQL for PostgreSQL, MySQL, SQL Server, Oracle and Snowflake. **New ▸ From SQL** (or opening
+  a `.sql` file) imports a SQL schema.
 - **Light and dark themes**, shared with this site. Works on a phone: below 768 px the code and the
-  diagram become two tabs.
+  diagram become two tabs. On a touch screen, press and hold a table, note, group, ref or the empty
+  canvas to open the menu a right-click opens.
 
 ## Files and the layout sidecar
 
@@ -79,22 +89,115 @@ entry file only.
 
 Every diagram in these docs has an **Open in editor** button that does the same thing.
 
+## Sticky notes
+
+Press **Note** in the diagram toolbar, choose **Add note here** in the canvas's context menu, or
+press <kbd>N</kbd> with the diagram focused: a new note appears and opens for writing. Double-click
+a note (or select it and press <kbd>Enter</kbd> or <kbd>F2</kbd>) to edit its text in place;
+<kbd>Mod</kbd>+<kbd>Enter</kbd> or clicking elsewhere keeps the text, <kbd>Esc</kbd> cancels.
+Drag a note's edges to resize it (the size goes into the [layout file](./layout-file.md) as
+`w`/`h`); <kbd>Delete</kbd> removes the selected notes. Notes are ordinary DBML `Note` blocks, so
+dbdiagram.io shows the same notes. <kbd>Mod</kbd>+<kbd>Z</kbd> in the code undoes a text change,
+on the diagram a layout change.
+
+## Colours and inactive refs
+
+Right-click a table, group or note (or open its menu with the keyboard) and choose **Colour ▸**: a
+palette of twelve swatches, **Custom…**, or **Default** to remove the colour. Tables get a
+`headercolor`, groups, notes and refs a `color` setting in the DBML, so the colours travel with the
+file. Right-click a ref for its colour and **Mark inactive** / **Mark active** (an inactive ref is
+drawn dashed). With several elements of one kind selected, the change applies to all of them. A
+ref written inline on a column (`[ref: > users.id]`) has no settings list to write to: its menu
+says **Edit this ref in code**.
+
+## Collapsing groups
+
+A collapsed `TableGroup` shows as one card with its name and table count, and refs to its tables
+attach to the card. Collapse or expand a group from its menu, by double-clicking its header, or all
+at once with **Collapse all groups** / **Expand all** in the **Auto-layout** menu. Collapsing them
+all packs the cards together (one undo step) and fits the view, so a large schema becomes a
+readable map of its areas; **Expand all** puts every table back where it was. The state is saved
+in the [layout file](./layout-file.md) (`collapsed` and the card's position on the group's entry),
+per view.
+
+## Views
+
+The view menu in the top bar lists the file's `DiagramView`s, with a filter field when there are
+more than seven, and manages them:
+
+- **New view from selection** — select tables, groups or notes, then name the view;
+- **Edit view…** — its name, and which tables (grouped by schema), groups, notes and schemas it
+  shows, or **All tables**;
+- **Delete view…**;
+- on a table: **Add to view ▸** and **Remove from view**.
+
+Every view keeps its own layout; renaming or deleting a view renames or deletes its layout too. See
+[Diagram views](./views.mdx).
+
+## Search, path and focus
+
+<kbd>Mod</kbd>+<kbd>K</kbd> (or <kbd>/</kbd> with the diagram focused, or the magnifier) opens the
+search over the diagram: tables, columns, enums, groups, notes and views. Picking a result centres
+and lights it and shows its code without moving your cursor. **Path** mode lights the shortest
+chain of refs between two tables. The detail switch (or <kbd>1</kbd> / <kbd>2</kbd> /
+<kbd>3</kbd>) shows table names only, keys, or every column, and is saved in the layout file.
+**Show related ▸ 1 / 2 / 3 hops** in a table's menu focuses on its neighbourhood. They work as in
+the docs: see [Exploring diagrams](./exploring.mdx).
+
+## Deep links
+
+The editor's address carries what you are looking at: `#view=billing&table=invoices&vp=…`. It is
+kept up to date as you work (without history entries) and applied again on reload, so you can
+bookmark a place in a schema. A link can combine it with `?url=` to open a file and go straight to
+a table: `/relvista/editor/?url=<file>#table=orders&hops=1`. The keys are the ones of
+[docs deep links](./exploring.mdx#deep-links). The **Share** dialog's **Include position** adds the
+current table and position to a share link.
+
+## Compare
+
+**Compare…** in the top bar (<kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>) compares the document
+with another version of it, taken from a **file**, **pasted** text, a **URL**, or — for a file
+opened from GitHub — another **Git ref** (branch, tag or commit). The diagram then shows the
+[schema diff](./diff.mdx): added, removed and changed tables, columns and refs in green, red and
+amber; a **Changes** panel lists them (filter, click to go to one); the code pane becomes a
+side-by-side diff. Edit on: the diff follows. **Copy summary** copies the changes as Markdown;
+export gives the toned picture; <kbd>Esc</kbd> or **Exit compare** goes back.
+
+## Export
+
+**Export ▾** downloads the diagram as **SVG** or **PNG**, opens the **PDF…** dialog (tiled at
+print scale, or one page per view; A4 or Letter; see [Export and print](./export.md)), prints, and
+saves the DBML file or the layout JSON. **SQL** exports go to PostgreSQL, MySQL, SQL Server,
+Oracle and **Snowflake** — multi-file projects too. Snowflake records but does not enforce foreign
+keys and has no enum type or secondary indexes: the export says so in comments and maps enums to
+`VARCHAR`. `Records` blocks become `INSERT` statements in single-file exports to the first four
+dialects; Snowflake exports and exports of multi-file projects leave them out (the editor tells
+you when that happens).
+
 ## Keyboard shortcuts
 
 Mod is <kbd>Cmd</kbd> on macOS and <kbd>Ctrl</kbd> elsewhere. Press <kbd>?</kbd> in the editor for
 the full list.
 
-| Keys                                                                       | Action                                          |
-| -------------------------------------------------------------------------- | ----------------------------------------------- |
-| <kbd>Mod</kbd>+<kbd>S</kbd>                                                | Save                                            |
-| <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>                               | Save as (Save folder as… for a folder)          |
-| <kbd>Mod</kbd>+<kbd>O</kbd>                                                | Open file                                       |
-| <kbd>Mod</kbd>+<kbd>Z</kbd> / <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo / redo (text in the code, else layout)     |
-| <kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>                                 | Auto-layout (keeps pinned tables)               |
-| <kbd>Alt</kbd>+<kbd>1</kbd> / <kbd>Alt</kbd>+<kbd>2</kbd>                  | Focus the code / the diagram                    |
-| Arrows (<kbd>Shift</kbd>: 1 px)                                            | Move the selected tables (diagram focused)      |
-| <kbd>Enter</kbd>                                                           | Show the focused table's code (diagram focused) |
-| <kbd>Shift</kbd>+<kbd>1</kbd>, <kbd>+</kbd>, <kbd>−</kbd>                  | Fit, zoom in, zoom out (diagram focused)        |
+| Keys                                                                       | Action                                                   |
+| -------------------------------------------------------------------------- | -------------------------------------------------------- |
+| <kbd>Mod</kbd>+<kbd>S</kbd>                                                | Save                                                     |
+| <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>                               | Save as (Save folder as… for a folder)                   |
+| <kbd>Mod</kbd>+<kbd>O</kbd>                                                | Open file                                                |
+| <kbd>Mod</kbd>+<kbd>Z</kbd> / <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo / redo (text in the code, else layout)              |
+| <kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>                                 | Auto-layout (keeps pinned tables)                        |
+| <kbd>Mod</kbd>+<kbd>K</kbd>, <kbd>/</kbd> (diagram focused)                | Search tables, columns, views; relationship paths        |
+| <kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>D</kbd>                                 | Compare with another version                             |
+| <kbd>Alt</kbd>+<kbd>1</kbd> / <kbd>Alt</kbd>+<kbd>2</kbd>                  | Focus the code / the diagram                             |
+| Arrows (<kbd>Shift</kbd>: 1 px)                                            | Move the selected tables (diagram focused)               |
+| <kbd>Enter</kbd>                                                           | Show the focused table's code (diagram focused)          |
+| <kbd>1</kbd> / <kbd>2</kbd> / <kbd>3</kbd>                                 | Detail: names / keys / all columns (diagram focused)     |
+| <kbd>N</kbd>                                                               | New sticky note (diagram focused)                        |
+| <kbd>Enter</kbd> / <kbd>F2</kbd>                                           | Edit the selected sticky note                            |
+| <kbd>Mod</kbd>+<kbd>Enter</kbd> / <kbd>Esc</kbd>                           | Finish / cancel editing a note                           |
+| <kbd>Delete</kbd> / <kbd>Backspace</kbd>                                   | Delete the selected sticky notes                         |
+| <kbd>Shift</kbd>+<kbd>1</kbd>, <kbd>+</kbd>, <kbd>−</kbd>                  | Fit, zoom in, zoom out (diagram focused)                 |
+| <kbd>Esc</kbd>                                                             | Close search, clear the highlight, exit focus or compare |
 
 ## Browser support
 

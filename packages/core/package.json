@@ -2,32 +2,64 @@
   "name": "@relvista/core",
   "version": "0.0.0",
   "description": "DBML parsing, diagram model, layout file and auto-layout for relvista",
+  "keywords": [
+    "dbml",
+    "dbdiagram",
+    "erd",
+    "er-diagram",
+    "entity-relationship",
+    "database",
+    "schema",
+    "diagram",
+    "auto-layout"
+  ],
+  "homepage": "https://relvista.github.io/relvista/docs/reference",
+  "bugs": {
+    "url": "https://github.com/relvista/relvista/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/relvista/relvista.git",
+    "directory": "packages/core"
+  },
   "license": "MIT",
+  "author": "relvista contributors",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
     },
-    "./layout.schema.json": "./layout.schema.json"
+    "./layout.schema.json": "./layout.schema.json",
+    "./package.json": "./package.json"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
     "dist",
-    "layout.schema.json"
+    "layout.schema.json",
+    "README.md",
+    "LICENSE"
   ],
-  "sideEffects": false,
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "sync-schema": "node ../../schemas/sync-schema.mjs",
-    "build": "pnpm run sync-schema && tsc -p tsconfig.build.json",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && pnpm run sync-schema && tsc -p tsconfig.build.json",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
     "@dagrejs/dagre": "3.1.3",
     "@dbml/parse": "12.1.0",
-    "ajv": "^8.17.1",
+    "ajv": "8.20.0",
     "elkjs": "0.12.1"
   },
   "devDependencies": {

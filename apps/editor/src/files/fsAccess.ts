@@ -2,8 +2,12 @@
 
 export const DBML_TYPES: FilePickerAcceptType[] = [
   {
-    description: 'DBML and layout files',
-    accept: { 'text/plain': ['.dbml'], 'application/json': ['.json'] },
+    description: 'DBML, layout and SQL files',
+    accept: {
+      'text/plain': ['.dbml'],
+      'application/json': ['.json'],
+      'application/sql': ['.sql', '.ddl'],
+    },
   },
 ];
 

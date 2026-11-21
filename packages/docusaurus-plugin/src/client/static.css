@@ -1,0 +1,195 @@
+/*
+ * The static layer of a diagram (docs/design/phase3-v1.md §5.1): the SVG drawn at build time,
+ * framed like the interactive viewer's first view, so the swap to the canvas does not move.
+ *
+ * The rule of the viewer (`@relvista/renderer` canvas, mirrored in src/ssr/build.tsx
+ * VIEWER_FRAME): the diagram fits the area the overlays leave free (padding 64px at the top, 28px
+ * elsewhere, more at the bottom for an always-on minimap), at most at zoom 1.15, centred in the
+ * box but never under the padding; never below the readable floor (0.45 / 0.55, 0.5 under 600px),
+ * where it scrolls inside the box instead. Narrow boxes (under 600px) shrink to what the diagram
+ * needs, as the viewer does. The diagram's size comes as variables on the box:
+ * --rv-w / --rv-h (diagram bounds), --rv-bx / --rv-by (their origin), --rv-box-h (box height),
+ * --rv-floor-wide, --rv-pt-* / --rv-pb-* (top and bottom padding, wide and narrow).
+ *
+ * That rule alone is the fallback (heights given as CSS lengths, browsers without container
+ * queries). A box of a pixel height also carries its own rules (`data-rv-frame`, src/ssr/frames.ts):
+ * the viewer's exact first view for every range of box widths, including the readable-zoom window
+ * of diagrams too big to fit, so the static picture and the canvas agree at any width.
+ */
+.relvista-ssr {
+  position: relative;
+  container: rv-ssr / inline-size;
+}
+
+/* The interactive viewer mounts over the static picture, then takes its place in the flow. */
+.relvista-ssr > .relvista-live {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+}
+.relvista-ssr[data-rv-live='done'] > .relvista-live {
+  position: relative;
+}
+
+.relvista-static-box {
+  position: relative;
+  box-sizing: border-box;
+  width: 100%;
+  height: var(--rv-box-h, 480px);
+  container-type: size;
+  overflow: auto;
+  overscroll-behavior: contain;
+  border: 1px solid var(--rv-ui-border);
+  border-radius: var(--ifm-code-border-radius, 8px);
+  background: var(--rv-canvas-bg);
+  color: var(--rv-ui-text);
+  font-family: var(--rv-font);
+  font-size: 13px;
+  line-height: 1.4;
+  --rv-pl: 28px;
+  --rv-pr: 28px;
+  --rv-pt: var(--rv-pt-wide, 64px);
+  --rv-pb: var(--rv-pb-wide, 28px);
+  --rv-floor: var(--rv-floor-wide, 0.55);
+}
+
+.relvista-static-box > svg.rv-diagram {
+  position: absolute;
+  overflow: visible;
+  /* Fallback without container queries: the whole diagram, centred. */
+  top: var(--rv-pt);
+  left: var(--rv-pl);
+  width: calc(100% - var(--rv-pl) - var(--rv-pr));
+  height: calc(100% - var(--rv-pt) - var(--rv-pb));
+}
+
+@supports (width: 1cqw) {
+  .relvista-static-box > svg.rv-diagram,
+  .relvista-static-grid {
+    /* Width of the diagram on screen: the fit (each axis, at most 1.15), not below the floor. */
+    --rv-fit-w: min(
+      100cqw - var(--rv-pl) - var(--rv-pr),
+      (100cqh - var(--rv-pt) - var(--rv-pb)) * var(--rv-w) / var(--rv-h),
+      var(--rv-w) * 1.15px
+    );
+    --rv-sw: max(var(--rv-fit-w), var(--rv-w) * var(--rv-floor) * 1px);
+    --rv-sh: calc(var(--rv-sw) * var(--rv-h) / var(--rv-w));
+    /* Centred in the box, kept inside the padded area (at its start when it scrolls). */
+    --rv-left: clamp(
+      var(--rv-pl),
+      (100cqw - var(--rv-sw)) / 2,
+      100cqw - var(--rv-pr) - var(--rv-sw)
+    );
+    --rv-top: clamp(
+      var(--rv-pt),
+      (100cqh - var(--rv-sh)) / 2,
+      100cqh - var(--rv-pb) - var(--rv-sh)
+    );
+  }
+  .relvista-static-box > svg.rv-diagram {
+    top: var(--rv-top);
+    left: var(--rv-left);
+    width: var(--rv-sw);
+    height: var(--rv-sh);
+    /* Room after the diagram when it scrolls, like the viewer's padding. */
+    margin: 0 var(--rv-pr) var(--rv-pb) 0;
+  }
+
+  /* The canvas grid of the viewer (dots every 20 diagram units, React Flow's Background). */
+  .relvista-static-grid {
+    --rv-gap: calc(20 * var(--rv-sw) / var(--rv-w));
+    --rv-dot: calc(0.6 * var(--rv-sw) / var(--rv-w));
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    background-image: radial-gradient(
+      circle at var(--rv-dot) var(--rv-dot),
+      var(--rv-grid-dot) var(--rv-dot),
+      transparent calc(var(--rv-dot) + 0.4px)
+    );
+    background-size: var(--rv-gap) var(--rv-gap);
+    background-position: calc(var(--rv-left) - var(--rv-bx) * var(--rv-sw) / var(--rv-w))
+      calc(var(--rv-top) - var(--rv-by) * var(--rv-sw) / var(--rv-w));
+  }
+}
+
+.relvista-static-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--rv-ui-muted);
+}
+
+/* Narrow boxes (phones): the viewer's narrow rules. */
+@container rv-ssr (max-width: 599.98px) {
+  .relvista-static-box {
+    --rv-pt: var(--rv-pt-narrow, 64px);
+    --rv-pb: var(--rv-pb-narrow);
+    --rv-floor: 0.5;
+  }
+  /* A box of a fixed height shrinks to what the diagram needs at its first zoom (at least 280px),
+     plus room for the small minimap when the diagram is wider than the box. */
+  .relvista-static-box[data-rv-fixed-height] {
+    --rv-nz-h: max(
+      var(--rv-h) * 0.5px,
+      min((100cqw - 56px) * var(--rv-h) / var(--rv-w), var(--rv-h) * 1.15px)
+    );
+    --rv-nz-mini: clamp(0px, (var(--rv-w) * 0.5px - 100cqw + 55px) * 1000, 66px);
+    height: min(
+      var(--rv-box-h),
+      max(280px, var(--rv-nz-h) + var(--rv-pt) + var(--rv-pb-narrow) + var(--rv-nz-mini))
+    );
+  }
+  .relvista-static-box .rv-title {
+    top: auto;
+    bottom: 10px;
+    max-width: calc(100% - 20px);
+  }
+}
+
+/*
+ * Print: the sharp vector picture of the whole diagram, one per box, fit to the page width (no
+ * readable-zoom floor, no scrolling window: paper cannot scroll); the interactive canvas stays off
+ * paper. A tall diagram is limited to the page height and centred.
+ */
+@media print {
+  .relvista-ssr > .relvista-static[hidden]:has(.relvista-static-box) {
+    display: block !important;
+  }
+  .relvista-ssr:has(> .relvista-static .relvista-static-box) > .relvista-live {
+    display: none !important;
+  }
+  .relvista-static-box,
+  .relvista-static-box[data-rv-fixed-height] {
+    height: auto !important;
+    container-type: normal;
+    overflow: visible;
+    padding: 12px;
+    break-inside: avoid;
+  }
+  .relvista-static-box:has(> .rv-title) {
+    padding-top: 44px;
+  }
+  .relvista-static-box > svg.rv-diagram {
+    position: static !important;
+    display: block;
+    width: 100% !important;
+    height: auto !important;
+    max-height: 90vh;
+    margin: 0 !important;
+  }
+  .relvista-static-grid {
+    display: none;
+  }
+}
+
+/*
+ * Dark mode without JavaScript: the site's colour mode (`html[data-theme='dark']`) switches the
+ * static picture to relvista's dark palette (scripts/copy-assets.mjs inserts the declarations of
+ * @relvista/renderer's dark palette below). Zero specificity, like the renderer's palettes, and
+ * before client/site-palette.css, whose site palette wins where it applies.
+ */
+/* @relvista:static-dark-palette */

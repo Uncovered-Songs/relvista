@@ -1,0 +1,188 @@
+/* DbmlViewer v1 (docs/design/phase3-v1.md §4.7): where the search panel, focus chip, diff legend,
+   PDF dialog and toast sit in the viewer; the new toolbar menus; the side card's actions. */
+
+/* Search panel: under the toolbar, at the right; over the whole width on phones. */
+.rv-viewer > .rv-nav-search {
+  position: absolute;
+  top: 54px;
+  right: 10px;
+  z-index: 8;
+  width: min(380px, calc(100% - 20px));
+}
+.rv-viewer--narrow > .rv-nav-search {
+  top: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 10;
+  width: auto;
+}
+/* Toolbar menus open over the search panel (wide viewers; on phones the panel covers the toolbar). */
+.rv-viewer > .rv-toolbar {
+  z-index: 9;
+}
+
+/* The toolbar has more buttons now: the title chip stops short of it. */
+.rv-viewer:not(.rv-viewer--narrow) > .rv-title {
+  max-width: max(120px, calc(100% - 500px));
+}
+
+/* Focus chip and diff legend: top left, under the title. */
+.rv-v1-chips {
+  position: absolute;
+  top: 54px;
+  left: 10px;
+  z-index: 5;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 6px;
+  max-width: calc(100% - 20px);
+  pointer-events: none;
+}
+.rv-v1-chips > * {
+  pointer-events: auto;
+}
+/* Without a title the chips take the title's place. */
+.rv-viewer:not(.rv-viewer--titled) .rv-v1-chips {
+  top: 10px;
+  max-width: calc(100% - 340px);
+}
+.rv-viewer--narrow .rv-v1-chips,
+.rv-viewer--narrow:not(.rv-viewer--titled) .rv-v1-chips {
+  top: 54px;
+  max-width: calc(100% - 20px);
+}
+.rv-v1-legend {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  margin: 0;
+  padding: 5px 12px;
+  list-style: none;
+  border: 1px solid var(--rv-ui-border);
+  border-radius: 999px;
+  background: var(--rv-ui-bg);
+  color: var(--rv-ui-text);
+  box-shadow: var(--rv-ui-shadow);
+  font-size: 12.5px;
+}
+.rv-v1-legend li {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.rv-v1-swatch {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  background: var(--rv-diff-changed);
+}
+.rv-v1-legend [data-rv-tone='added'] .rv-v1-swatch {
+  background: var(--rv-diff-added);
+}
+.rv-v1-legend [data-rv-tone='removed'] .rv-v1-swatch {
+  background: transparent;
+  border: 2px dashed var(--rv-diff-removed);
+}
+
+/* Toast (link copied, PDF progress): bottom centre; an empty live region stays in the DOM. */
+.rv-v1-toast {
+  position: absolute;
+  left: 50%;
+  bottom: 14px;
+  z-index: 9;
+  max-width: calc(100% - 20px);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+.rv-v1-toast[data-rv-empty] {
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+}
+.rv-v1-toast > span {
+  display: block;
+  padding: 7px 12px;
+  border: 1px solid var(--rv-ui-border);
+  border-radius: 8px;
+  background: var(--rv-ui-solid);
+  color: var(--rv-ui-text);
+  box-shadow: var(--rv-ui-shadow);
+  font-size: 12.5px;
+  text-align: center;
+  animation: rv-nav-in 120ms ease-out;
+}
+
+/* Toolbar menus with radio items (detail level). */
+.rv-tb-menu .rv-tb-menu-radio {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  min-width: 190px;
+}
+.rv-tb-menu-radio small {
+  display: block;
+  color: var(--rv-ui-muted);
+  font-size: 11.5px;
+}
+.rv-tb-menu-check {
+  display: inline-flex;
+  flex: none;
+  width: 16px;
+  height: 18px;
+  align-items: center;
+  color: var(--rv-ui-focus);
+}
+
+/* Phones: one compact row (the view menu drops its icon); two rows rather than overflow. */
+.rv-viewer--narrow .rv-toolbar {
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.rv-viewer--narrow .rv-tb-select {
+  padding: 0 6px;
+}
+.rv-viewer--narrow .rv-tb-select > svg:first-child {
+  display: none;
+}
+.rv-viewer--narrow .rv-tb-select select {
+  max-width: 80px;
+}
+
+/* Side card: "Show related". */
+.rv-sidecard-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0 0 10px;
+}
+.rv-sidecard-action {
+  all: unset;
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid var(--rv-ui-border);
+  border-radius: 7px;
+  color: var(--rv-ui-text);
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.rv-sidecard-action:hover {
+  background: var(--rv-ui-hover);
+}
+.rv-sidecard-action:focus-visible {
+  outline: 2px solid var(--rv-ui-focus);
+  outline-offset: 1px;
+}
+
+@media print {
+  .rv-v1-chips,
+  .rv-v1-toast {
+    display: none !important;
+  }
+}

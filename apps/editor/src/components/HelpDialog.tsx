@@ -5,7 +5,7 @@ import { store } from '../state/store.js';
 import { Modal } from './Modal.js';
 
 const DOCS = new URL('../', new URL(import.meta.env.BASE_URL, 'https://x.invalid')).pathname;
-const GITHUB = 'https://github.com/Uncovered-Songs/relvista';
+const GITHUB = 'https://github.com/relvista/relvista';
 /** Shipped next to the app by vite.config.ts (THIRD_PARTY_NOTICES.md at the repository root). */
 const NOTICES = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.txt`;
 

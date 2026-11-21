@@ -2,36 +2,77 @@
   "name": "@relvista/renderer",
   "version": "0.0.0",
   "description": "React SVG renderer, interactive viewer and export for relvista DBML diagrams",
+  "keywords": [
+    "dbml",
+    "erd",
+    "er-diagram",
+    "entity-relationship",
+    "database",
+    "schema",
+    "diagram",
+    "react",
+    "svg",
+    "react-flow"
+  ],
+  "homepage": "https://relvista.github.io/relvista/docs/reference",
+  "bugs": {
+    "url": "https://github.com/relvista/relvista/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/relvista/relvista.git",
+    "directory": "packages/renderer"
+  },
   "license": "MIT",
+  "author": "relvista contributors",
   "type": "module",
-  "main": "./dist/index.js",
-  "types": "./dist/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
-    "./styles.css": "./dist/styles.css"
+    "./styles.css": {
+      "types": "./dist/styles.css.d.ts",
+      "default": "./dist/styles.css"
+    },
+    "./xyflow.css": {
+      "types": "./dist/xyflow.css.d.ts",
+      "default": "./dist/xyflow.css"
+    },
+    "./package.json": "./package.json"
   },
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "README.md",
+    "LICENSE"
   ],
-  "sideEffects": [
-    "**/*.css"
-  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
+    "build": "node -e \"require('fs').rmSync('dist',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && node scripts/copy-css.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
   },
   "peerDependencies": {
-    "react": ">=18",
-    "react-dom": ">=18"
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0"
   },
   "dependencies": {
     "@relvista/core": "workspace:*",
-    "@xyflow/react": "13.0.2"
+    "@xyflow/react": "13.0.2",
+    "jspdf": "4.2.1",
+    "svg2pdf.js": "2.9.0"
   },
   "devDependencies": {
     "@testing-library/react": "^16",

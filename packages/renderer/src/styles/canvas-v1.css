@@ -1,0 +1,63 @@
+/* DiagramCanvas v1 (docs/design/phase3-v1.md §4.3): collapsed groups, resize handles, ref hit
+   areas. Palette variables come from styles.css. */
+
+/* Collapsed group: a card like a table. */
+.rv-node-collapsed-group {
+  border-radius: 8px;
+  box-shadow:
+    0 1px 2px var(--rv-table-shadow),
+    0 2px 6px var(--rv-table-shadow);
+  transition: box-shadow 120ms ease;
+}
+.rv-node-collapsed-group:hover {
+  box-shadow:
+    0 1px 2px var(--rv-table-shadow),
+    0 6px 16px var(--rv-table-shadow);
+}
+.rv-canvas .react-flow__node-rvCollapsedGroup {
+  cursor: pointer;
+}
+.rv-canvas .react-flow__node-rvCollapsedGroup.draggable {
+  cursor: grab;
+}
+
+/* Keyboard focus on any node: visible, never mistaken for the selection or highlight rings. */
+.rv-canvas .react-flow__node:focus-visible {
+  outline: none;
+}
+.rv-canvas .react-flow__node:focus-visible > .rv-node {
+  outline: 2px solid var(--rv-ui-focus);
+  outline-offset: 2px;
+}
+
+/* Resize handles (notes; tables with resizable="all"). Big enough to hit on touch screens. */
+.rv-canvas .react-flow__resize-control.rv-resize-handle {
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid var(--rv-selection);
+  border-radius: 3px;
+  background: var(--rv-ui-solid);
+}
+.rv-canvas .react-flow__resize-control.rv-resize-line {
+  border-color: var(--rv-selection);
+  opacity: 0.6;
+}
+@media (pointer: coarse) {
+  .rv-canvas .react-flow__resize-control.rv-resize-handle {
+    width: 16px;
+    height: 16px;
+  }
+}
+
+/* Ref lines take the pointer only when the canvas has edge handlers (an invisible wide stroke). */
+.rv-canvas .rv-edge-hit {
+  cursor: pointer;
+}
+.rv-canvas .react-flow__edge:has(.rv-edge-hit:hover) .rv-ref {
+  filter: drop-shadow(0 0 1.5px var(--rv-selection));
+}
+
+/* Focus mode (data-rv-focus): a quieter background while only part of the diagram shows. */
+.rv-canvas[data-rv-focus='true'] .react-flow__background {
+  opacity: 0.85;
+}

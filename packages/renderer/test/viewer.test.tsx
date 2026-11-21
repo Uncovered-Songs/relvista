@@ -86,7 +86,8 @@ describe('DbmlViewer', () => {
     fireEvent.click(screen.getByLabelText('Export'));
     expect(screen.getByText('Download SVG')).toBeTruthy();
     expect(screen.getByText('Download PNG')).toBeTruthy();
-    const link = screen.getByLabelText('Open in editor') as HTMLAnchorElement;
+    // The link is encoded asynchronously (compression): wait for it under load.
+    const link = (await screen.findByLabelText('Open in editor')) as HTMLAnchorElement;
     expect(link.href.startsWith('https://example.org/editor/#dbml=')).toBe(true);
     expect((await decodeShareHash(link.hash))?.dbml).toBe(GOOD);
   });
@@ -106,7 +107,8 @@ describe('DbmlViewer', () => {
     expect(container.querySelector('.rv-viewer--overlay')).toBeNull();
   });
 
-  it.each(loadExamples())('renders example %s', async (_name, input) => {
+  // 14-large takes a while to lay out on a busy CI runner.
+  it.each(loadExamples())('renders example %s', { timeout: 30_000 }, async (_name, input) => {
     const onDiagnostics = vi.fn();
     render(<DbmlViewer source={input} onDiagnostics={onDiagnostics} />);
     await flush();

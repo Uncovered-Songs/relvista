@@ -1,16 +1,19 @@
 /**
  * Geometry of the canvas: the synchronous (dagre) layout at once, then the ELK result when some
- * visible node has no saved position. Saved positions always win. Stability in the editable canvas
- * comes from the caller reporting ELK's placements as saved positions ('place' changes), after
- * which this hook has nothing left to lay out.
+ * visible node has no saved position and core's `needsElk` says the 'auto' engine would load ELK
+ * for them (docs/design/phase3-v1.md §3.3). Saved positions always win. Stability in the editable
+ * canvas comes from the caller reporting the placements as saved positions ('place' changes),
+ * after which this hook has nothing left to lay out.
  */
-import type {
-  DetailLevel,
-  DiagramGeometry,
-  DiagramModel,
-  LayoutOptions,
-  ViewLayout,
-  ViewLayoutOverride,
+import {
+  collapsedGroupIds,
+  needsElk,
+  type DetailLevel,
+  type DiagramGeometry,
+  type DiagramModel,
+  type LayoutOptions,
+  type ViewLayout,
+  type ViewLayoutOverride,
 } from '@relvista/core';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { layoutAsync, layoutSync } from '../geometry.js';
@@ -24,29 +27,50 @@ function hasSavedPosition(saved: ViewLayoutOverride | null, id: string): boolean
   return Number.isFinite(n.x) && Number.isFinite(n.y);
 }
 
-/** Visible tables and sticky notes without a saved position (model order: notes, then tables). */
+/**
+ * Visible nodes without a saved position (model order: notes, then tables). A collapsed group
+ * (core §3.1) stands for its members: they are skipped and the group id is listed (after the
+ * tables) when the group has no position itself.
+ */
 export function unplacedIds(model: DiagramModel, saved: ViewLayoutOverride | null): string[] {
+  const collapsed = collapsedGroupIds(model, saved as Partial<ViewLayout> | null);
   const out: string[] = [];
   for (const n of model.stickyNotes) if (!hasSavedPosition(saved, n.id)) out.push(n.id);
-  for (const t of model.tables) if (!hasSavedPosition(saved, t.id)) out.push(t.id);
+  for (const t of model.tables) {
+    if (t.groupId && collapsed.has(t.groupId)) continue;
+    if (!hasSavedPosition(saved, t.id)) out.push(t.id);
+  }
+  for (const g of model.groups)
+    if (collapsed.has(g.id) && !hasSavedPosition(saved, g.id)) out.push(g.id);
   return out;
 }
 
 export function hasAllPositions(model: DiagramModel, saved: ViewLayoutOverride | null): boolean {
   if (!saved) return false;
-  return (
-    model.tables.every((t) => hasSavedPosition(saved, t.id)) &&
-    model.stickyNotes.every((n) => hasSavedPosition(saved, n.id))
-  );
+  return unplacedIds(model, saved).length === 0;
 }
 
-/** Sync (dagre) geometry first, then the async (ELK) result when it arrives. */
+/** The laid-out box of a node id: a table or note, or a collapsed group's box. */
+export function placedBox(
+  geometry: DiagramGeometry,
+  id: string,
+): { x: number; y: number; width: number; height: number } | undefined {
+  if (Object.hasOwn(geometry.nodes, id)) return geometry.nodes[id];
+  const g = Object.hasOwn(geometry.groups, id) ? geometry.groups[id] : undefined;
+  return g?.collapsed ? g : undefined;
+}
+
+/**
+ * Sync (dagre) geometry first, then the async (ELK, engine 'auto') result when it arrives. With
+ * `allowElk: false` (diff mode, §4.3 rule 7) the sync layout is final.
+ */
 export function useCanvasGeometry(
   model: DiagramModel | null,
   saved: ViewLayoutOverride | null,
   detailLevel: DetailLevel,
   aspectRatio: number | undefined,
   workerUrl?: string | URL,
+  allowElk = true,
 ): { geometry: DiagramGeometry | null; final: boolean } {
   const options = useMemo<LayoutOptions>(
     () => ({
@@ -62,14 +86,24 @@ export function useCanvasGeometry(
     for: DiagramGeometry;
     geometry: DiagramGeometry | null;
   } | null>(null);
-  const complete = !!model && hasAllPositions(model, saved);
+  // Nothing for ELK to do: every node is placed, or the 'auto' engine would place the rest with
+  // dagre anyway (the sync layout then is the final one, and ELK is never loaded).
+  const complete = useMemo(() => {
+    if (!model) return false;
+    if (!allowElk || hasAllPositions(model, saved)) return true;
+    try {
+      return !needsElk(model, options);
+    } catch {
+      return false;
+    }
+  }, [model, saved, options, allowElk]);
   useEffect(() => {
     if (!model || !sync || complete) return;
     let alive = true;
     const run = () => {
       let p: Promise<DiagramGeometry> | null = null;
       try {
-        p = layoutAsync(model, { ...options, engine: 'elk', ...(workerUrl ? { workerUrl } : {}) });
+        p = layoutAsync(model, { ...options, engine: 'auto', ...(workerUrl ? { workerUrl } : {}) });
       } catch {
         p = null;
       }

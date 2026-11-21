@@ -20,7 +20,10 @@ export const METRICS = {
   maxTableWidth: 420,
   /** Height of the bottom padding under the last column row. */
   tableBottomPadding: 4,
+  /** Default sticky-note width; a saved `w` replaces it (clamped to noteMinWidth..noteMaxWidth). */
   noteWidth: 220,
+  noteMinWidth: 120,
+  noteMaxWidth: 640,
   notePadding: 12,
   noteLineHeight: 18,
   noteMinHeight: 64,

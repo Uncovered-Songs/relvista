@@ -16,7 +16,11 @@
     "validate:examples": "node scripts/validate-examples.mjs",
     "notices": "node scripts/third-party-notices.mjs",
     "notices:check": "node scripts/third-party-notices.mjs --check",
+    "packages:check": "node scripts/check-packages.mjs",
+    "license:sync": "node scripts/copy-license.mjs",
     "changeset": "changeset",
+    "version-packages": "changeset version && prettier --write \"packages/*/CHANGELOG.md\" \"packages/*/package.json\"",
+    "release:first": "node scripts/first-publish.mjs",
     "docs:build": "pnpm --filter relvista-docs... build",
     "docs:start": "pnpm --filter \"relvista-docs^...\" build && pnpm --filter relvista-docs start",
     "editor:dev": "pnpm --filter \"relvista-editor^...\" build && pnpm --filter relvista-editor dev",
@@ -28,12 +32,14 @@
     "compat:build": "pnpm --filter relvista-docs-compat... build"
   },
   "devDependencies": {
+    "@arethetypeswrong/cli": "0.18.5",
     "@changesets/cli": "^3.0.3",
     "@eslint/js": "^9",
     "@types/node": "^24",
     "eslint": "^9",
     "globals": "^17.14.0",
     "prettier": "^3",
+    "publint": "0.3.25",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.73.0"
   }

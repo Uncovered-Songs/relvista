@@ -15,22 +15,42 @@ import {
 import { memo, type ReactElement } from 'react';
 import { contrastText, parseHex, safeColor } from '../theme.js';
 import { useColors } from './context.js';
+import {
+  REMOVED_DASH,
+  REMOVED_OPACITY,
+  ROW_TINT_OPACITY,
+  TINT_OPACITY,
+  TONE_COLOR,
+  type DecorationTone,
+} from './decorations.js';
 import { baseline, truncate } from './text.js';
 
+/** Props of `TableSvg`. */
 export interface TableSvgProps {
+  /** The table to draw. */
   table: Table;
+  /** Where to draw it (`geometry.nodes[table.id]`). */
   box: Box;
+  /** Which columns to draw. Default `all`. */
   detailLevel?: DetailLevel;
   /** Draw at reduced opacity (not part of the current highlight). */
   dimmed?: boolean;
   /** Draw with the highlight border. */
   highlighted?: boolean;
+  /** Draw with the selection border. */
   selected?: boolean;
   /** Column names whose rows get the highlight background. */
   highlightColumns?: ReadonlySet<string> | null;
   /** id of a `<filter>` in scope for the card shadow. */
   shadowFilter?: string | null;
+  /** Text measurement used for truncation. Default: the built-in width estimate. */
   measure?: TextMeasure;
+  /** Decoration tone of the table (ring + tint; removed: dashed, 60% opacity, name struck through). */
+  tone?: DecorationTone;
+  /** Column name → decoration tone (row tint; removed rows struck through). */
+  columnTones?: Readonly<Record<string, DecorationTone>> | null;
+  /** Text badge at the header's right end, e.g. "~3". */
+  badge?: string;
 }
 
 function headerPath(w: number, h: number, r: number, roundBottom: boolean): string {
@@ -98,6 +118,86 @@ function NoteIcon({ x, y, color }: { x: number; y: number; color: string }): Rea
   );
 }
 
+/** Width of a header badge (`Decorations.badges`) showing `text`. */
+export function headerBadgeWidth(text: string): number {
+  return Math.ceil(Array.from(text).length * METRICS.badge.fontSize * 0.62) + 10;
+}
+
+/**
+ * A decoration badge, right-aligned at `right`, vertically centred on `cy`.
+ *
+ * @param props - The badge text, tone and position.
+ */
+export function HeaderBadge({
+  text,
+  right,
+  cy,
+  color,
+}: {
+  text: string;
+  right: number;
+  cy: number;
+  color: string;
+}): ReactElement {
+  const { c, font } = useColors();
+  const bw = headerBadgeWidth(text);
+  const B = METRICS.badge;
+  return (
+    <g className="rv-node-badge" data-rv-node-badge={text}>
+      <rect
+        x={right - bw}
+        y={cy - B.height / 2}
+        width={bw}
+        height={B.height}
+        rx={B.height / 2}
+        style={{ fill: c('tableBg'), stroke: color }}
+        strokeWidth={1}
+      />
+      <text
+        x={right - bw / 2}
+        y={baseline(cy, B.fontSize)}
+        textAnchor="middle"
+        style={{ fill: color, fontFamily: font, fontSize: B.fontSize, fontWeight: 700 }}
+      >
+        {text}
+      </text>
+    </g>
+  );
+}
+
+/**
+ * The decoration ring drawn 3 px outside a card of `width` × `height` (removed: dashed).
+ *
+ * @param props - The card size and the tone.
+ */
+export function ToneRing({
+  tone,
+  width,
+  height,
+  radius,
+}: {
+  tone: DecorationTone;
+  width: number;
+  height: number;
+  radius: number;
+}): ReactElement {
+  const { c } = useColors();
+  return (
+    <rect
+      className="rv-tone-ring"
+      x={-3}
+      y={-3}
+      width={width + 6}
+      height={height + 6}
+      rx={radius + 3}
+      ry={radius + 3}
+      style={{ fill: 'none', stroke: c(TONE_COLOR[tone]) }}
+      strokeWidth={2}
+      strokeDasharray={tone === 'removed' ? REMOVED_DASH : undefined}
+    />
+  );
+}
+
 /** One table card: header band, column rows, key markers and badges, drawn at `box`. */
 export const TableSvg = memo(function TableSvg({
   table,
@@ -109,6 +209,9 @@ export const TableSvg = memo(function TableSvg({
   highlightColumns,
   shadowFilter,
   measure = estimateTextWidth,
+  tone,
+  columnTones,
+  badge,
 }: TableSvgProps): ReactElement {
   const { c, font, mono } = useColors();
   const w = box.width;
@@ -124,7 +227,9 @@ export const TableSvg = memo(function TableSvg({
 
   const title = tableTitle(table);
   const noteRoom = table.note ? METRICS.headerNoteIconWidth : 0;
-  const titleText = truncate(title, 'tableName', w - px * 2 - noteRoom, measure);
+  const badgeW = badge ? headerBadgeWidth(badge) : 0;
+  const badgeRoom = badge ? badgeW + 6 : 0;
+  const titleText = truncate(title, 'tableName', w - px * 2 - noteRoom - badgeRoom, measure);
   const schemaPrefix =
     table.schema !== 'public' && titleText.startsWith(`${table.schema}.`) ? table.schema + '.' : '';
 
@@ -135,8 +240,9 @@ export const TableSvg = memo(function TableSvg({
     <g
       className="rv-table"
       data-rv-table={table.id}
+      data-rv-tone={tone}
       transform={`translate(${box.x} ${box.y})`}
-      opacity={dimmed ? 0.28 : undefined}
+      opacity={dimmed ? 0.28 : tone === 'removed' ? REMOVED_OPACITY : undefined}
     >
       <rect
         width={w}
@@ -146,6 +252,16 @@ export const TableSvg = memo(function TableSvg({
         style={{ fill: c('tableBg') }}
         filter={shadowFilter ? `url(#${shadowFilter})` : undefined}
       />
+      {tone && cols.length > 0 ? (
+        <rect
+          className="rv-tone-tint"
+          y={METRICS.headerHeight}
+          width={w}
+          height={Math.max(0, h - METRICS.headerHeight - r)}
+          style={{ fill: c(TONE_COLOR[tone]) }}
+          fillOpacity={TINT_OPACITY}
+        />
+      ) : null}
       <path
         d={headerPath(w, METRICS.headerHeight, r, cols.length === 0)}
         style={{ fill: headerFill }}
@@ -171,8 +287,28 @@ export const TableSvg = memo(function TableSvg({
           titleText
         )}
       </text>
+      {tone === 'removed' ? (
+        <line
+          className="rv-strike"
+          data-rv-strike="name"
+          x1={px}
+          x2={px + measure(titleText, 'tableName')}
+          y1={METRICS.headerHeight / 2}
+          y2={METRICS.headerHeight / 2}
+          style={{ stroke: headerText }}
+          strokeWidth={1.3}
+        />
+      ) : null}
       {table.note ? (
         <NoteIcon x={w - px - 4} y={METRICS.headerHeight / 2} color={headerText} />
+      ) : null}
+      {badge ? (
+        <HeaderBadge
+          text={badge}
+          right={w - px - noteRoom}
+          cy={METRICS.headerHeight / 2}
+          color={tone ? c(TONE_COLOR[tone]) : c('rowText')}
+        />
       ) : null}
 
       {cols.map((col, i) => {
@@ -204,8 +340,9 @@ export const TableSvg = memo(function TableSvg({
           bx -= B.gap;
         }
         const lit = highlightColumns?.has(col.name) ?? false;
+        const rowTone = columnTones?.[col.name];
         return (
-          <g key={col.name} className="rv-column" data-rv-column={col.name}>
+          <g key={col.name} className="rv-column" data-rv-column={col.name} data-rv-tone={rowTone}>
             <title>{columnTooltip(col)}</title>
             {lit ? (
               <rect
@@ -214,6 +351,17 @@ export const TableSvg = memo(function TableSvg({
                 width={w}
                 height={METRICS.rowHeight}
                 style={{ fill: c('rowHighlight') }}
+              />
+            ) : null}
+            {rowTone ? (
+              <rect
+                className="rv-tone-tint"
+                x={0}
+                y={y0}
+                width={w}
+                height={METRICS.rowHeight}
+                style={{ fill: c(TONE_COLOR[rowTone]) }}
+                fillOpacity={ROW_TINT_OPACITY}
               />
             ) : null}
             {i > 0 ? (
@@ -286,6 +434,18 @@ export const TableSvg = memo(function TableSvg({
             >
               {typeText}
             </text>
+            {rowTone === 'removed' ? (
+              <line
+                className="rv-strike"
+                data-rv-strike="row"
+                x1={nameX}
+                x2={typeRight}
+                y1={cy}
+                y2={cy}
+                style={{ stroke: c(TONE_COLOR.removed) }}
+                strokeWidth={1.2}
+              />
+            ) : null}
           </g>
         );
       })}
@@ -303,6 +463,7 @@ export const TableSvg = memo(function TableSvg({
         }}
         strokeWidth={selected ? 2 : 1}
       />
+      {tone ? <ToneRing tone={tone} width={w} height={h} radius={r} /> : null}
     </g>
   );
 });

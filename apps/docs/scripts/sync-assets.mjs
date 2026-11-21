@@ -301,7 +301,7 @@ write(
     '',
     "import GalleryGrid from '@site/src/components/GalleryGrid';",
     '',
-    "Every file in the repository's [`examples/`](https://github.com/Uncovered-Songs/relvista/tree/main/examples) folder, rendered by the Docusaurus plugin exactly as your docs would render it. Each example focuses on one part of DBML; open one to explore the diagram and read its source.",
+    "Every file in the repository's [`examples/`](https://github.com/relvista/relvista/tree/main/examples) folder, rendered by the Docusaurus plugin exactly as your docs would render it. Each example focuses on one part of DBML; open one to explore the diagram and read its source.",
     '',
     `<GalleryGrid items={${JSON.stringify(cards, null, 2)}} />`,
     '',

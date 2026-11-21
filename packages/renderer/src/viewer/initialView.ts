@@ -98,21 +98,43 @@ const HIDDEN_BEFORE_COST = 1.5;
  */
 const OBSTACLE_COST = 0.25;
 
-export function initialViewport(
-  input: ViewportInput & {
-    minZoom: number;
-    /** Padding of the fit, when it differs (e.g. room for the minimap all along the bottom). */
-    fitPadding?: Padding;
-    /**
-     * Lowest zoom the first view uses to show the whole diagram, or to fill one axis of it
-     * (small diagrams, phones). Default `minZoom`.
-     */
-    fitFloor?: number;
-  },
-): Viewport | null {
+export type InitialViewportInput = ViewportInput & {
+  minZoom: number;
+  /** Padding of the fit, when it differs (e.g. room for the minimap all along the bottom). */
+  fitPadding?: Padding;
+  /**
+   * Lowest zoom the first view uses to show the whole diagram, or to fill one axis of it
+   * (small diagrams, phones). Default `minZoom`.
+   */
+  fitFloor?: number;
+};
+
+/**
+ * How `initialViewport` chose its viewport, so a picture drawn without the canvas (a static SVG
+ * framed by CSS for any width) can follow the same rule: the zoom (the fit, one axis filled, or a
+ * fixed zoom) and, per axis, whether the diagram is centred or the window starts at a diagram
+ * coordinate.
+ */
+export interface InitialViewportDetail {
+  viewport: Viewport;
+  /** 'fit': `fitViewport` with the fit padding; 'fill-x' / 'fill-y': that axis exactly filled. */
+  zoom: 'fit' | 'fill-x' | 'fill-y' | 'fixed';
+  /** Per axis: null when centred (`centredOffset` with `padding`), else the window's start. */
+  startX: number | null;
+  startY: number | null;
+}
+
+export function initialViewport(input: InitialViewportInput): Viewport | null {
+  return initialViewportDetail(input)?.viewport ?? null;
+}
+
+/** `initialViewport` with how it was chosen (see `InitialViewportDetail`). */
+export function initialViewportDetail(input: InitialViewportInput): InitialViewportDetail | null {
   const fit = fitViewport({ ...input, padding: input.fitPadding ?? input.padding });
   const floor = Math.min(input.fitFloor ?? input.minZoom, input.minZoom);
-  if (!fit || fit.zoom >= floor || input.nodes.length === 0) return fit;
+  if (!fit) return null;
+  if (fit.zoom >= floor || input.nodes.length === 0)
+    return { viewport: fit, zoom: 'fit', startX: null, startY: null };
   const { bounds: b, width, height, padding: p, nodes } = input;
   const groups = input.groups ?? [];
   const obstacles = input.obstacles ?? [];
@@ -122,6 +144,12 @@ export function initialViewport(
   // pans along the other one only.
   const fill = Math.min(input.maxZoom, Math.max(aw / b.width, ah / b.height));
   const zoom = fill >= floor && fill < input.minZoom ? fill : input.minZoom;
+  const zoomKind: InitialViewportDetail['zoom'] =
+    zoom !== fill || fill === input.maxZoom
+      ? 'fixed'
+      : aw / b.width >= ah / b.height
+        ? 'fill-x'
+        : 'fill-y';
   // World size of the visible window.
   const ww = aw / zoom;
   const wh = ah / zoom;
@@ -252,5 +280,10 @@ export function initialViewport(
       if (score > best.score) best = { x: x0, y: y0, score };
     }
   }
-  return { x: p.left - best.x * zoom, y: p.top - best.y * zoom, zoom };
+  return {
+    viewport: { x: p.left - best.x * zoom, y: p.top - best.y * zoom, zoom },
+    zoom: zoomKind,
+    startX: b.width <= ww ? null : best.x,
+    startY: b.height <= wh ? null : best.y,
+  };
 }

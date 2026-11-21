@@ -42,3 +42,8 @@
 details > summary code {
   font-size: 0.85em;
 }
+
+/* The navbar's API item is a plain link (docusaurus.config.ts): active on the API pages. */
+html.plugin-id-api .navbar__link.rv-navbar-api {
+  color: var(--ifm-navbar-link-active-color);
+}

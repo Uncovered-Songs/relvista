@@ -23,6 +23,7 @@ export interface SourceSpan {
   end: SourcePosition;
 }
 
+/** A parser or model error or warning, located in one source file. */
 export interface Diagnostic extends SourceSpan {
   severity: 'error' | 'warning';
   message: string;
@@ -30,6 +31,7 @@ export interface Diagnostic extends SourceSpan {
   code?: number;
 }
 
+/** A multi-file DBML project: every file by name, plus the entry file. */
 export interface CompileInputFiles {
   /**
    * File name → DBML source. Keys may be relative (`schema.dbml`) or absolute (`/db/schema.dbml`).
@@ -40,14 +42,17 @@ export interface CompileInputFiles {
   entry: string;
 }
 
+/** What `compileDbml` accepts: one DBML string, or a multi-file project. */
 export type CompileInput = string | CompileInputFiles;
 
+/** What `compileDbml` returns: the model (when the source parsed) and every diagnostic. */
 export interface CompileResult {
   /** `null` when the parser could not produce a database (most errors), or the entry file is missing. */
   model: DiagramModel | null;
   diagnostics: Diagnostic[];
 }
 
+/** The whole schema as plain data: tables, refs, enums, groups, sticky notes and views. */
 export interface DiagramModel {
   /** Entry file key, as given in the input. */
   entry: string;
@@ -64,6 +69,7 @@ export interface DiagramModel {
   records?: Record<string, number>;
 }
 
+/** The `Project` block of the entry file. */
 export interface ProjectInfo {
   name: string | null;
   note: string | null;
@@ -73,6 +79,7 @@ export interface ProjectInfo {
   settings: Record<string, string>;
 }
 
+/** A table, with its own columns and the columns of the TablePartials it injects. */
 export interface Table {
   /**
    * `schema.table`, schema defaulting to `public`. A segment containing `.`, `"`, `\`, `:`, `,`,
@@ -94,11 +101,13 @@ export interface Table {
   span: SourceSpan;
 }
 
+/** A column's `default:` value, with the kind of literal it was written as. */
 export interface ColumnDefault {
   kind: 'number' | 'string' | 'boolean' | 'expression';
   value: string | number;
 }
 
+/** A table column with its type and constraints. */
 export interface Column {
   name: string;
   /** Type as written, including arguments, e.g. `varchar(255)`, `s.mood` for a schema-qualified enum. */
@@ -122,6 +131,7 @@ export interface Column {
   span: SourceSpan;
 }
 
+/** One column or expression of an index. */
 export interface IndexColumn {
   /** Column name, or the expression text for an expression index. */
   value: string;
@@ -129,6 +139,7 @@ export interface IndexColumn {
   sortOrder?: 'desc';
 }
 
+/** An entry of a table's `indexes` block. */
 export interface Index {
   name: string | null;
   columns: IndexColumn[];
@@ -140,14 +151,17 @@ export interface Index {
   fromPartial: string | null;
 }
 
+/** A `check` constraint (table-level, or column-level in `Column.checks`). */
 export interface Check {
   name: string | null;
   expression: string;
   fromPartial: string | null;
 }
 
+/** How many rows one side of a ref can have. */
 export type Cardinality = 'one' | 'many';
 
+/** One side of a ref: the table, its columns and their cardinality. */
 export interface RefEndpoint {
   tableId: string;
   columns: string[];
@@ -158,6 +172,9 @@ export interface RefEndpoint {
   raw: string;
 }
 
+/**
+ * A relationship between columns of two tables (`Ref`, inline `ref:`, or one from a TablePartial).
+ */
 export interface Ref {
   /**
    * Stable id derived from both endpoints and the op, also for named refs:
@@ -186,11 +203,13 @@ export interface Ref {
   span: SourceSpan;
 }
 
+/** One value of an enum. */
 export interface EnumValue {
   name: string;
   note: string | null;
 }
 
+/** An `enum` declaration. */
 export interface Enum {
   /** `schema.name`, schema defaulting to `public`, encoded like table ids. */
   id: string;
@@ -200,6 +219,7 @@ export interface Enum {
   span: SourceSpan;
 }
 
+/** A `TableGroup`: a named, optionally coloured set of tables drawn inside one box. */
 export interface TableGroup {
   /** `group:<name>`. */
   id: string;
@@ -210,6 +230,7 @@ export interface TableGroup {
   span: SourceSpan;
 }
 
+/** A sticky note (top-level `Note name { ... }`) drawn on the diagram. */
 export interface StickyNote {
   /** `note:<name>`. */
   id: string;
@@ -219,6 +240,7 @@ export interface StickyNote {
   span: SourceSpan;
 }
 
+/** A `DiagramView`: the tables, notes and groups one named view shows. */
 export interface DiagramView {
   name: string;
   /** Visible tables, in model order, with `*`, `TableGroups` and `Schemas` already resolved. */

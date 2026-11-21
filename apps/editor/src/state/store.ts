@@ -8,17 +8,22 @@
 import {
   DEFAULT_VIEW,
   compileDbml,
+  emptyLayout,
   pruneLayout,
   renameNode,
   serializeLayout,
+  formatDiff,
+  type DetailLevel,
   type DiagramModel,
   type Layout,
   type Viewport,
 } from '@relvista/core';
 import {
   effectivePositions,
+  nodeEntry,
   setNodePositions,
   type DiagramCanvasHandle,
+  type DiagramTarget,
   type LayoutChange,
 } from '@relvista/renderer';
 import { useSyncExternalStore } from 'react';
@@ -68,9 +73,19 @@ import {
 } from '../files/text.js';
 import { diagnosticsToMarkers, INFO_OWNER, MARKER_OWNER } from '../monaco/markers.js';
 import { CompileScheduler, type CompileOutcome } from './compile.js';
-import { LayoutHistory } from './history.js';
+import { LayoutHistory, historyActionOf } from './history.js';
 import { detectRenames } from './renames.js';
 import { SessionStore, type RecentEntry } from './session.js';
+import {
+  QUIET_MS,
+  isEmptyTarget,
+  roundViewport,
+  withDetailLevel,
+  type NavFocus,
+  type NavPick,
+  type SearchRequest,
+} from './navigation.js';
+import { computeCompare, type CompareOther, type CompareResult } from './compare.js';
 import type {
   CompileState,
   DocumentOrigin,
@@ -86,7 +101,37 @@ import { monaco } from '../monaco/setup.js';
 import type { DbmlLanguageService } from '../monaco/languageService.js';
 // Small (the converter itself loads in a worker on first use), and the menus import it anyway.
 import * as sql from '../sql/sql.js';
-import type { ExportFormat, ImportFormat } from '../sql/sql.js';
+import type { ImportFormat, SqlExportFormat } from '../sql/sql.js';
+import { guessDialect, isSqlName } from '../sql/dialect.js';
+import { sqlSourceOf } from '../sql/flatten.js';
+import {
+  canEdit,
+  chainEdits,
+  colorSettingOf,
+  combineEdits,
+  createStickyNote,
+  removeStickyNote,
+  setSetting,
+  setStickyNoteText,
+  syncViews,
+  uniqueNoteName,
+  type EditInput,
+  type ElementTarget,
+  type FileEdit,
+  type SettingName,
+  type ViewOp,
+} from '../edits/dbmlEdits.js';
+import { applyFileEdits } from '../edits/applyEdits.js';
+import {
+  addToViewOp,
+  createOp,
+  layoutAfterViewOps,
+  removeFromViewOp,
+  updateOp,
+  viewAfterOps,
+  viewDefinition,
+  type ViewDefinition,
+} from '../diagram/views.js';
 
 // ---------------------------------------------------------------------------------------------
 // State
@@ -101,8 +146,14 @@ export interface Toast {
 export type Dialog =
   | { kind: 'share' }
   | { kind: 'examples' }
-  | { kind: 'sql-import' }
+  | {
+      kind: 'sql-import';
+      /** An opened or dropped .sql file: its text and the guessed dialect. */
+      initial?: { text: string; format: ImportFormat; name: string };
+    }
   | { kind: 'help' }
+  | { kind: 'compare' }
+  | { kind: 'pdf' }
   | { kind: 'url'; initial?: string }
   | { kind: 'remote-error'; url: string; message: string }
   | { kind: 'entry'; paths: string[]; resolve(path: string | null): void }
@@ -114,6 +165,26 @@ export type Dialog =
       danger?: boolean;
       resolve(ok: boolean): void;
     };
+
+/** The views manager dialog (design phase3 §6.7). */
+export type ViewEditorState =
+  | { mode: 'create'; name: string; initial: ViewDefinition }
+  | { mode: 'edit'; name: string; initial: ViewDefinition };
+
+/** Compare mode (design phase3 §6.11): the other version and the diff against the open document. */
+export interface CompareState {
+  other: CompareOther;
+  otherModel: DiagramModel;
+  /** False: other = before, current = after (the default). */
+  swapped: boolean;
+  /** The code pane shows the read-only Monaco diff editor instead of the editor. */
+  codeDiff: boolean;
+  /** Diff of the latest good model against the other version; null without a model. */
+  result: CompareResult | null;
+}
+
+/** Notes longer than this ask before they are deleted (design phase3 §6.4). */
+export const NOTE_DELETE_CONFIRM_CHARS = 200;
 
 export interface EditorState {
   ready: boolean;
@@ -144,6 +215,27 @@ export interface EditorState {
   compileMs: number;
   /** Single-file document with no text: the code pane shows the empty state. */
   entryEmpty: boolean;
+  /** Sticky note whose text is being edited on the canvas; `fresh`: just created. */
+  noteEditing: { id: string; fresh: boolean } | null;
+  /** The New / Edit view dialog. */
+  viewEditor: ViewEditorState | null;
+  // --- navigation (design phase3 §6.8–§6.10): UI state, never in the layout -----------------
+  /** Detail level from a deep link: drawn, not written to the layout. */
+  detailOverride: DetailLevel | null;
+  /** Focus mode (session + URL). */
+  focus: NavFocus | null;
+  /** Search hit / deep-link table lit on the canvas. */
+  pick: NavPick | null;
+  /** Table last selected, revealed or focused (mirrored to the URL as `table=`). */
+  navTable: string | null;
+  /** Open search panel. */
+  search: SearchRequest | null;
+  /** Viewport after the user's last pan / zoom (mirrored as `vp=`); null until they move. */
+  viewport: Viewport | null;
+  /** A deep link waiting for the canvas to report 'done'. */
+  pendingTarget: DiagramTarget | null;
+  /** Compare mode. */
+  compare: CompareState | null;
 }
 
 const DEFAULT_SPLIT = 0.4;
@@ -200,6 +292,16 @@ function initialState(): EditorState {
     sqlBusy: null,
     compileMs: 0,
     entryEmpty: true,
+    noteEditing: null,
+    viewEditor: null,
+    detailOverride: null,
+    focus: null,
+    pick: null,
+    navTable: null,
+    search: null,
+    viewport: null,
+    pendingTarget: null,
+    compare: null,
   };
 }
 
@@ -226,11 +328,24 @@ export interface OpenSpec {
   /** Already parsed layout (share links). */
   layout?: Layout | null;
   view?: string;
+  /** The URL the document was fetched from (`?url=`, Open from URL). */
+  remoteUrl?: string | null;
 }
 
 function hasNode(layout: Layout | null, id: string): boolean {
   if (!layout) return false;
   return Object.values(layout.views).some((v) => Object.hasOwn(v.nodes, id));
+}
+
+/** The layout without entries for `ids`, in every view. */
+function removeLayoutNodes(layout: Layout, ids: string[]): Layout {
+  const drop = new Set(ids);
+  const views: Layout['views'] = {};
+  for (const [name, v] of Object.entries(layout.views)) {
+    const nodes = Object.fromEntries(Object.entries(v.nodes).filter(([id]) => !drop.has(id)));
+    views[name] = { ...v, nodes };
+  }
+  return { ...layout, views };
 }
 
 function modelIds(model: DiagramModel): string[] {
@@ -292,6 +407,14 @@ export class EditorStore {
   private checkStoredBeforeWrite = false;
   /** The layout the document opened with counts as clean (not a restored or shared arrangement). */
   private baseLayoutClean = true;
+  /** The last EditInput handed to the canvas edit helpers (reused while the texts are the same). */
+  private lastEditInput: EditInput | null = null;
+  /** A note created with addNote(at): placed there once a compile shows it. */
+  private pendingPlacement: { id: string; at: { x: number; y: number }; wsId: string } | null =
+    null;
+  /** Until then viewport changes are the canvas's own (first view, an applied target). */
+  private quietUntil = Number.POSITIVE_INFINITY;
+  private searchN = 0;
 
   editor: monaco.editor.IStandaloneCodeEditor | null = null;
   canvas: DiagramCanvasHandle | null = null;
@@ -336,9 +459,11 @@ export class EditorStore {
 
   // --- toasts and dialogs --------------------------------------------------------------------
 
-  toast(kind: Toast['kind'], message: string, action?: Toast['action']): void {
+  /** Shows a toast; returns its id (for `dismissToast`, e.g. a progress toast). */
+  toast(kind: Toast['kind'], message: string, action?: Toast['action']): number {
     const t: Toast = { id: this.toastId++, kind, message, ...(action ? { action } : {}) };
     this.set({ toasts: [...this.state.toasts, t].slice(-4) });
+    return t.id;
   }
 
   dismissToast(id: number): void {
@@ -511,12 +636,14 @@ export class EditorStore {
       layoutHandle: spec.layoutHandle ?? null,
       layoutInvalid,
       view: spec.view ?? DEFAULT_VIEW,
+      remoteUrl: spec.remoteUrl ?? null,
     };
     if (restore) {
       ws.id = restore.workspace.id || ws.id;
       ws.view = restore.workspace.view;
     }
     this.history.clear(layout);
+    this.quietUntil = Number.POSITIVE_INFINITY;
     // A layout that arrived in a share link is someone's arrangement: saving keeps it.
     const userTouched = restore
       ? restore.workspace.layoutDirty
@@ -535,12 +662,21 @@ export class EditorStore {
       layoutDirty: false,
       activeFile,
       highlightedNodeId: null,
+      noteEditing: null,
+      viewEditor: null,
       canUndo: false,
       canRedo: false,
       saveState: 'saved',
       layoutStatus: 'pending',
       initialViewport: restore?.ui.viewport ?? null,
       entryEmpty: files.length === 1 && models.textOf(spec.entry) === '',
+      detailOverride: null,
+      focus: restore?.ui.focus ?? null,
+      pick: null,
+      navTable: restore?.ui.focus?.id ?? null,
+      search: null,
+      viewport: null,
+      compare: null,
       ...(restore ? { split: restore.ui.split, tab: restore.ui.tab } : {}),
     };
     this.recomputeDirty();
@@ -692,7 +828,7 @@ export class EditorStore {
       });
       return;
     }
-    const files = await pickWithInput({ multiple: true, accept: '.dbml,.json' });
+    const files = await pickWithInput({ multiple: true, accept: '.dbml,.json,.sql' });
     if (files.length) {
       await this.guardOpen(() =>
         this.openWalked(
@@ -753,6 +889,12 @@ export class EditorStore {
     const paths = walked.map((w) => w.path);
     const { dbml, sidecarOf } = pairSidecars(paths);
     if (dbml.length === 0) {
+      // A .sql file opens the SQL import dialog, prefilled (design phase3 §6.3).
+      const sqlFile = walked.find((w) => isSqlName(w.path));
+      if (sqlFile) {
+        await this.openSqlFile(sqlFile);
+        return;
+      }
       this.toast(
         'warning',
         walked.some((w) => isSidecarName(w.path))
@@ -797,6 +939,23 @@ export class EditorStore {
       },
       { rotate: true },
     );
+  }
+
+  /** Opens a .sql file in the SQL import dialog with the dialect guessed from its text. */
+  async openSqlFile(file: Pick<WalkedFile, 'path' | 'size' | 'read'>): Promise<void> {
+    if (file.size > LIMITS.maxFileBytes)
+      throw new LimitError(`${file.path} is larger than ${formatBytes(LIMITS.maxFileBytes)}.`);
+    let text: string;
+    try {
+      text = new TextDecoder('utf-8', { fatal: true }).decode(await file.read());
+    } catch {
+      throw new NotUtf8Error();
+    }
+    if (text.startsWith('\uFEFF')) text = text.slice(1);
+    this.openDialog({
+      kind: 'sql-import',
+      initial: { text, format: guessDialect(text), name: baseName(file.path) },
+    });
   }
 
   async openRecent(entry: RecentEntry): Promise<void> {
@@ -862,7 +1021,14 @@ export class EditorStore {
       const name = remoteFileName(url);
       const key = isDbmlName(name) ? name : `${name}.dbml`;
       await this.openWorkspace(
-        { origin: 'url', name: key, entry: key, files: [{ key, bytes }], layoutText },
+        {
+          origin: 'url',
+          name: key,
+          entry: key,
+          files: [{ key, bytes }],
+          layoutText,
+          remoteUrl: url,
+        },
         { rotate: true },
       );
       return true;
@@ -936,6 +1102,7 @@ export class EditorStore {
         layoutHandle: w.layoutHandle,
         ...(layout !== undefined ? { layout } : {}),
         view: w.view,
+        remoteUrl: w.remoteUrl ?? null,
       },
       { restore },
     );
@@ -991,10 +1158,19 @@ export class EditorStore {
   async init(): Promise<void> {
     await this.startAutosaveLease();
     const { readLayoutParam, readUrlParam } = await import('../files/remote.js');
+    const { parseDiagramTarget } = await import('@relvista/renderer');
+    // Deep-link keys (view, table, vp, …) next to a share payload or alone (design phase3 §6.10):
+    // read before the share hash is removed, applied once the canvas has laid out the document.
+    const target = parseDiagramTarget(location.hash);
     let opened = await this.openShareHash();
-    // A share link opened in a tab that already runs the editor changes only the hash.
+    // A share link opened in a tab that already runs the editor changes only the hash; a hash of
+    // target keys typed into the address bar moves the diagram there. (replaceState, which mirrors
+    // the state, fires no hashchange.)
     window.addEventListener('hashchange', () => {
-      void this.openShareHash();
+      const t = parseDiagramTarget(location.hash);
+      void this.openShareHash().then((shared) => {
+        if (!isEmptyTarget(t) || shared) this.setPendingTarget(isEmptyTarget(t) ? null : t);
+      });
     });
 
     const remote = readUrlParam(location.search);
@@ -1029,7 +1205,12 @@ export class EditorStore {
       this.sessions.hasPrevious().catch(() => false),
       this.sessions.recent().catch(() => [] as RecentEntry[]),
     ]);
-    this.set({ ready: true, hasPrevious, recent });
+    this.set({
+      ready: true,
+      hasPrevious,
+      recent,
+      pendingTarget: isEmptyTarget(target) ? null : target,
+    });
   }
 
   /**
@@ -1118,8 +1299,10 @@ export class EditorStore {
     this.state = { ...this.state, dirty };
   }
 
-  private onCompiled({ result, ms }: CompileOutcome): void {
+  private onCompiled({ result, ms, input }: CompileOutcome): void {
     const { model, diagnostics } = result;
+    // The canvas edit helpers reuse this model while the texts are still these (no recompile).
+    this.lastEditInput = model ? { files: input.files, entry: input.entry, model } : null;
     this.applyMarkers(diagnostics);
     if (!model) {
       this.set({
@@ -1147,8 +1330,16 @@ export class EditorStore {
       ...(renamed ? { ws: { ...this.state.ws, layout } } : {}),
       ...(touch ? { userTouched: true } : {}),
     };
+    const compare = this.state.compare;
+    if (compare) {
+      // Editing the open document updates the diff live.
+      const next = { ...compare };
+      next.result = this.compareResultFor(next);
+      this.state = { ...this.state, compare: next };
+    }
     this.set(renamed ? { layoutDirty: this.computeLayoutDirty() } : {}, renamed);
     if (touch) this.updateTitle();
+    if (this.pendingPlacement) this.placePendingNote();
   }
 
   private applyMarkers(diagnostics: CompileState['diagnostics']): void {
@@ -1209,7 +1400,8 @@ export class EditorStore {
   }
 
   onLayoutChange = (next: Layout, change: LayoutChange): void => {
-    if (change.kind === 'place') {
+    // 'resize' (note handles) is a user edit like 'move': one history step, dirty layout.
+    if (historyActionOf(change.kind) === 'amend') {
       const placed = effectivePositions(next, change.view);
       this.history.amend(next, (l) => {
         const have = effectivePositions(l, change.view);
@@ -1270,17 +1462,169 @@ export class EditorStore {
   }
 
   setView(view: string): void {
-    this.setWs({ view }, { highlightedNodeId: null });
+    // What pointed into the old view goes (as in the docs viewer); the detail override stays.
+    // The canvas shows the view's first picture: its move, not the user's.
+    this.quietViewport();
+    this.setWs(
+      { view },
+      {
+        highlightedNodeId: null,
+        focus: null,
+        pick: null,
+        navTable: null,
+        search: null,
+        viewport: null,
+      },
+    );
   }
 
-  /** Pan / zoom ended: the session keeps the viewport (restored on reload). */
-  onViewportChange = (): void => {
+  /**
+   * Pan / zoom ended: the session keeps the viewport (restored on reload), and the URL hash
+   * mirrors it once the user moved (the canvas's own first view and target moves are quiet).
+   */
+  onViewportChange = (viewport?: Viewport): void => {
     if (this.state.ready) this.scheduleAutosave();
+    if (!viewport || Date.now() < this.quietUntil) return;
+    const vp = roundViewport(viewport);
+    const cur = this.state.viewport;
+    if (!cur || cur.x !== vp.x || cur.y !== vp.y || cur.zoom !== vp.zoom)
+      this.set({ viewport: vp });
   };
 
+  /** Moves made by the app for the next `ms` (an applied target) are not the user's. */
+  quietViewport(ms = QUIET_MS): void {
+    // Before the first 'done' everything is quiet anyway; a longer window is never shortened.
+    if (this.quietUntil !== Number.POSITIVE_INFINITY)
+      this.quietUntil = Math.max(this.quietUntil, Date.now() + ms);
+  }
+
   setLayoutStatus = (status: 'pending' | 'done'): void => {
+    if (status === 'done' && this.quietUntil === Number.POSITIVE_INFINITY)
+      this.quietUntil = Date.now() + QUIET_MS;
     if (status !== this.state.layoutStatus) this.set({ layoutStatus: status });
   };
+
+  // --- navigation (design phase3 §6.8–§6.10) ------------------------------------------------
+
+  /**
+   * Detail level from the pane's switch or keys 1 / 2 / 3: written to `layout.settings` as one
+   * layout history step ('all' removes the key); dirty only when the file says otherwise.
+   */
+  setDetailLevel(level: DetailLevel): void {
+    const layout = this.state.ws.layout;
+    const next = withDetailLevel(layout, level);
+    if (this.state.detailOverride !== null) this.set({ detailOverride: null });
+    if (next === layout || !next) return;
+    this.commitLayout(next);
+  }
+
+  setDetailOverride(detail: DetailLevel | null): void {
+    if (detail !== this.state.detailOverride) this.set({ detailOverride: detail });
+  }
+
+  /** Focus mode on (`hops` 0..5) or off. Focus is session state: autosaved, never in the layout. */
+  setFocus(focus: NavFocus | null): void {
+    const cur = this.state.focus;
+    if (cur === focus || (cur && focus && cur.id === focus.id && cur.hops === focus.hops)) return;
+    // The canvas fits the focused tables (or all, on exit): its move, not the user's.
+    this.quietViewport();
+    this.set({ focus, viewport: null, ...(focus ? { navTable: focus.id } : {}) }, true);
+  }
+
+  setPick(pick: NavPick | null): void {
+    this.set({ pick, ...(pick?.table ? { navTable: pick.table } : {}) });
+  }
+
+  /** A table was selected or revealed from the diagram (mirrored as `table=`); null clears it. */
+  setNavTable(id: string | null): void {
+    if (id !== this.state.navTable) this.set({ navTable: id });
+  }
+
+  openSearch(
+    init: { query?: string; path?: [string, string] | null; autoFocus?: boolean } = {},
+  ): void {
+    this.set({
+      search: {
+        n: ++this.searchN,
+        query: init.query ?? '',
+        path: init.path ?? null,
+        autoFocus: init.autoFocus ?? true,
+      },
+      pick: null,
+    });
+  }
+
+  closeSearch(): void {
+    if (this.state.search) this.set({ search: null });
+  }
+
+  setPendingTarget(target: DiagramTarget | null): void {
+    this.set({ pendingTarget: target });
+  }
+
+  /**
+   * Esc on the diagram: one layer per press — the search panel, then the lit pick, then focus
+   * mode, then compare mode. False when there was nothing to close.
+   */
+  escapeLayer(): boolean {
+    const s = this.state;
+    if (s.search) this.set({ search: null });
+    else if (s.pick) this.set({ pick: null });
+    else if (s.focus) this.set({ focus: null }, true);
+    else if (s.compare) this.exitCompare();
+    else return false;
+    return true;
+  }
+
+  // --- compare (design phase3 §6.11) --------------------------------------------------------
+
+  enterCompare(other: CompareOther, otherModel: DiagramModel, swapped?: boolean): void {
+    const prev = this.state.compare;
+    const compare: CompareState = {
+      other,
+      otherModel,
+      swapped: swapped ?? prev?.swapped ?? false,
+      codeDiff: prev?.codeDiff ?? false,
+      result: null,
+    };
+    compare.result = this.compareResultFor(compare);
+    this.set({ compare, search: null, pick: null });
+  }
+
+  exitCompare(): void {
+    if (this.state.compare) this.set({ compare: null });
+  }
+
+  swapCompare(): void {
+    const c = this.state.compare;
+    if (!c) return;
+    const next = { ...c, swapped: !c.swapped };
+    next.result = this.compareResultFor(next);
+    this.set({ compare: next });
+  }
+
+  setCompareCodeDiff(on: boolean): void {
+    const c = this.state.compare;
+    if (c && c.codeDiff !== on) this.set({ compare: { ...c, codeDiff: on } });
+  }
+
+  private compareResultFor(c: CompareState): CompareResult | null {
+    const model = this.state.compile.model;
+    return model ? computeCompare(model, c.otherModel, c.swapped) : null;
+  }
+
+  /** "Copy summary": the diff as Markdown (`formatDiff`). */
+  async copyCompareSummary(): Promise<void> {
+    const r = this.state.compare?.result;
+    if (!r) return;
+    const text = formatDiff(r.diff, { markdown: true });
+    try {
+      await navigator.clipboard.writeText(text);
+      this.toast('success', 'Summary copied (Markdown).');
+    } catch {
+      this.toast('error', 'Could not copy the summary: the browser refused the clipboard.');
+    }
+  }
 
   setHighlight(id: string | null): void {
     if (id !== this.state.highlightedNodeId) this.set({ highlightedNodeId: id });
@@ -1649,13 +1993,13 @@ export class EditorStore {
 
   // --- export --------------------------------------------------------------------------------
 
-  private exportTitle(): string {
+  exportTitle(): string {
     return (
       this.state.compile.model?.project?.name ?? baseName(this.state.ws.name).replace(/\.dbml$/, '')
     );
   }
 
-  private exportBase(): string {
+  exportBase(): string {
     return baseName(this.suggestedName()).replace(/\.dbml$/, '');
   }
 
@@ -1699,13 +2043,42 @@ export class EditorStore {
     }
   }
 
-  async exportSql(format: ExportFormat, label: string): Promise<void> {
-    if (this.state.ws.files.length > 1 || this.state.compile.stale) return;
-    if (!sql.sqlLoaded()) this.set({ sqlBusy: 'Loading SQL support (2.6 MB)…' });
+  /**
+   * SQL export of the whole workspace. Snowflake: relvista's own generator from the model (main
+   * thread). Other dialects: `@dbml/core` in the SQL worker, given the entry text (one file, the
+   * same output as before) or a single-file DBML generated from the model (several files).
+   */
+  async exportSql(format: SqlExportFormat, label: string): Promise<void> {
+    if (this.state.compile.stale) return;
+    const files = models.allTexts();
+    const entry = this.state.ws.entry;
+    const multi = Object.keys(files).length > 1;
+    // The texts as they are now (the debounced compile may not have run yet).
+    const model = format === 'snowflake' || multi ? compileDbml({ files, entry }).model : null;
+    if ((format === 'snowflake' || multi) && !model) {
+      this.toast('error', `${label} export needs a schema without errors.`);
+      return;
+    }
+    if (format !== 'snowflake' && !sql.sqlLoaded())
+      this.set({ sqlBusy: 'Loading SQL support (2.6 MB)…' });
     else this.set({ sqlBusy: `Exporting ${label}…` });
     try {
-      const text = await sql.exportSql(this.entryText(), format);
+      const text =
+        format === 'snowflake'
+          ? (await import('../sql/snowflake.js')).exportSnowflake(model!, {
+              title: this.exportTitle(),
+            })
+          : await sql.exportSql(sqlSourceOf(files, entry, model), format);
       downloadBytes(text, `${this.exportBase()}.${format}.sql`, 'application/sql');
+      // Records become INSERT statements only through @dbml/core from one file's own text.
+      const rows = model?.records ? Object.values(model.records).reduce((a, b) => a + b, 0) : 0;
+      if (rows > 0)
+        this.toast(
+          'info',
+          `${label} export has no INSERT statements: Records are left out of ${
+            format === 'snowflake' ? 'Snowflake exports' : 'multi-file exports'
+          }.`,
+        );
     } catch (e) {
       this.toast('error', `${label} export failed: ${errorMessage(e)}`);
     } finally {
@@ -1713,18 +2086,352 @@ export class EditorStore {
     }
   }
 
-  async importSql(text: string, format: ImportFormat): Promise<boolean> {
+  async importSql(text: string, format: ImportFormat, name = 'imported.sql'): Promise<boolean> {
     this.set({ sqlBusy: sql.sqlLoaded() ? 'Converting…' : 'Loading SQL support (2.6 MB)…' });
     try {
       const dbml = await sql.importSql(text, format);
       this.set({ sqlBusy: null });
-      await this.openText(dbml, 'imported.dbml', 'sql');
+      await this.openText(dbml, `${baseName(name).replace(/\.(sql|ddl|txt)$/i, '')}.dbml`, 'sql');
       return true;
     } catch (e) {
       this.set({ sqlBusy: null });
       this.toast('error', `Could not convert the SQL: ${errorMessage(e)}`);
       return false;
     }
+  }
+
+  // --- canvas text edits (design phase3 §6.1) -----------------------------------------------
+  //
+  // Each action computes edits with the @dbml/parse helpers (edits/dbmlEdits.ts), applies them to
+  // the Monaco models as one undo stop per file, and lets the normal compile flow update the
+  // diagram (compiled at once, not after the typing debounce). Mod+Z in the code pane undoes the
+  // text; layout changes that go with an action are one layout history step.
+
+  /**
+   * The current texts as an EditInput: the same object while no text changed, carrying the model
+   * of the latest compile when it was made from exactly these texts (no extra compile).
+   */
+  editInput(): EditInput {
+    const files = models.allTexts();
+    const entry = this.state.ws.entry;
+    const prev = this.lastEditInput;
+    if (
+      prev &&
+      prev.entry === entry &&
+      Object.keys(prev.files).length === Object.keys(files).length &&
+      Object.entries(files).every(([k, t]) => prev.files[k] === t)
+    )
+      return prev;
+    this.lastEditInput = { files, entry };
+    return this.lastEditInput;
+  }
+
+  /** Applies canvas edits to Monaco and compiles right away. False when there was nothing to do. */
+  applyEdits(edits: FileEdit[]): boolean {
+    if (edits.length === 0) return false;
+    applyFileEdits(monaco, edits);
+    this.compiler.schedule(() => ({ files: models.allTexts(), entry: this.state.ws.entry }), 0);
+    return true;
+  }
+
+  /** Whether a colour / inactive item can be applied to this element (else: "Edit this in code"). */
+  canEditSetting(target: ElementTarget, setting: SettingName): boolean {
+    return canEdit(this.editInput(), target, setting);
+  }
+
+  /**
+   * New sticky note "New note" (`note_<n>`) at the end of the entry file. With `at` (diagram
+   * coordinates) the note is placed there once it compiles; without, the canvas places it like
+   * any new node. Resolves to the note's id, or null.
+   */
+  addNote(
+    at?: { x: number; y: number },
+    text = 'New note',
+    options: { edit?: boolean } = {},
+  ): string | null {
+    const input = this.editInput();
+    // The model may lag the texts by the typing debounce: also skip names the texts already use.
+    const words = Object.values(input.files).flatMap((t) =>
+      [...t.matchAll(/\bnote_\d+\b/gi)].map((m) => m[0]),
+    );
+    const name = uniqueNoteName(input.model ?? this.state.compile.model, 'note', words);
+    const edits = createStickyNote(input, this.state.ws.entry, name, text);
+    if (!this.applyEdits(edits)) {
+      this.toast('error', 'Could not add a note here.');
+      return null;
+    }
+    const id = `note:${name}`;
+    if (options.edit) this.set({ noteEditing: { id, fresh: true } });
+    if (at) {
+      this.pendingPlacement = { id, at, wsId: this.state.ws.id };
+      this.placePendingNote();
+    }
+    return id;
+  }
+
+  /** Opens the on-canvas editor of a sticky note (double-click, Enter / F2, the node menu). */
+  startNoteEdit(id: string): void {
+    const model = this.state.compile.model;
+    if (!model?.stickyNotes.some((n) => n.id === id)) return;
+    this.set({ noteEditing: { id, fresh: false } });
+  }
+
+  stopNoteEdit(): void {
+    if (this.state.noteEditing) this.set({ noteEditing: null });
+  }
+
+  /**
+   * Delete / Backspace or the menu: asks first when a note is long (more than 200 characters),
+   * then `deleteNotes`. Resolves to the ids deleted.
+   */
+  async requestDeleteNotes(ids: string[]): Promise<string[]> {
+    const model = this.state.compile.model;
+    const notes = (model?.stickyNotes ?? []).filter((n) => ids.includes(n.id));
+    if (!notes.length) return [];
+    const long = notes.filter((n) => n.content.length > NOTE_DELETE_CONFIRM_CHARS);
+    if (long.length) {
+      const one = notes.length === 1;
+      const ok = await this.confirm(
+        one ? `Delete the note ${notes[0]!.name}?` : `Delete ${notes.length} notes?`,
+        one
+          ? `It has ${notes[0]!.content.length} characters of text. Undo in the code brings the text back.`
+          : `${long.map((n) => n.name).join(', ')} ${long.length === 1 ? 'has' : 'have'} more than ${NOTE_DELETE_CONFIRM_CHARS} characters of text. Undo in the code brings the text back.`,
+        one ? 'Delete note' : 'Delete notes',
+        true,
+      );
+      if (!ok) return [];
+    }
+    return this.deleteNotes(notes.map((n) => n.id));
+  }
+
+  /** Replaces a sticky note's text (one undo stop). */
+  setNoteText(id: string, text: string): boolean {
+    const edits = setStickyNoteText(this.editInput(), id, text);
+    if (this.applyEdits(edits)) return true;
+    this.toast('error', 'Could not change this note; edit it in code.');
+    return false;
+  }
+
+  /**
+   * Deletes sticky notes from the DBML (and from the views listing them) and their layout entries
+   * in every view (one layout history step). Notes that other text still names (a `Metadata`
+   * block, an import) are left alone with a toast. Resolves to the ids deleted.
+   */
+  deleteNotes(ids: string[]): string[] {
+    const input = this.editInput();
+    const done: string[] = [];
+    // Last block first, each on the text the previous removals left: a note at the end of a file
+    // takes the blank lines before it along (`trimEofRemoval`), so removing a run of notes at the
+    // end gives the file's bytes from before they were added.
+    const model = input.model ?? this.state.compile.model;
+    const offset = (id: string) => {
+      const span = model?.stickyNotes.find((n) => n.id === id)?.span;
+      return span ? span.start.offset : -1;
+    };
+    const ordered = [...new Set(ids)].sort((a, b) => offset(b) - offset(a));
+    const steps = ordered.map((id) => (i: EditInput) => {
+      const edits = removeStickyNote(i, id);
+      if (edits.length) done.push(id);
+      return edits;
+    });
+    const edits = ordered.length > 1 ? chainEdits(input, steps) : combineEdits(input, steps);
+    const deleted = [...new Set(done)].filter((id) => ids.includes(id));
+    const kept = ids.filter((id) => !deleted.includes(id));
+    if (kept.length)
+      this.toast(
+        'warning',
+        `${kept.map((id) => id.replace(/^note:/, '')).join(', ')} ${kept.length === 1 ? 'is' : 'are'} used elsewhere in the code; delete ${kept.length === 1 ? 'it' : 'them'} there.`,
+      );
+    if (!this.applyEdits(edits)) return [];
+    if (this.state.noteEditing && deleted.includes(this.state.noteEditing.id)) this.stopNoteEdit();
+    const layout = this.state.ws.layout;
+    // Every view's entry of every deleted note: one layout step (Mod+Z on the canvas).
+    if (layout && deleted.some((id) => hasNode(layout, id)))
+      this.history.batch(() => this.commitLayout(removeLayoutNodes(layout, deleted)));
+    return deleted;
+  }
+
+  /**
+   * Colour of tables (`headercolor`), groups, notes and refs (`color`); `null` removes it. Every
+   * target is changed in one go (one undo stop per file). False when none could be changed.
+   */
+  setColor(targets: ElementTarget[], color: string | null): boolean {
+    const edits = combineEdits(
+      this.editInput(),
+      targets.map((t) => (i: EditInput) => setSetting(i, t, colorSettingOf(t.kind), color)),
+    );
+    if (this.applyEdits(edits)) return true;
+    if (targets.length) this.toast('info', 'Nothing to change here; edit it in code.');
+    return false;
+  }
+
+  /** Marks refs inactive (dashed, not exported as constraints) or active again. */
+  setRefInactive(refIds: string[], inactive: boolean): boolean {
+    const edits = combineEdits(
+      this.editInput(),
+      refIds.map(
+        (id) => (i: EditInput) =>
+          setSetting(i, { kind: 'ref', id }, 'inactive', inactive ? 'true' : null),
+      ),
+    );
+    if (this.applyEdits(edits)) return true;
+    if (refIds.length) this.toast('info', 'Edit this ref in code.');
+    return false;
+  }
+
+  /**
+   * Creates, renames, edits or deletes DiagramViews in the DBML; the layout's view entries follow
+   * (renamed: moved to the new name; deleted: removed), as one layout history step. The open view
+   * follows a rename and falls back to the default view when deleted.
+   */
+  syncViews(ops: ViewOp[]): boolean {
+    const edits = syncViews(this.editInput(), ops);
+    if (!this.applyEdits(edits)) return false;
+    const layout = layoutAfterViewOps(this.state.ws.layout, ops);
+    const view = viewAfterOps(this.state.ws.view, ops);
+    if (layout !== this.state.ws.layout && layout)
+      this.history.batch(() => this.commitLayout(layout));
+    if (view !== this.state.ws.view) this.setView(view);
+    return true;
+  }
+
+  // --- views manager (design phase3 §6.7) ----------------------------------------------------
+
+  /** What view `name` lists, as written in its file. */
+  viewDefinitionOf(name: string): ViewDefinition | null {
+    const input = this.editInput();
+    const model = input.model ?? this.state.compile.model;
+    if (!model?.views.some((v) => v.name === name)) return null;
+    return viewDefinition(input.files, model, name);
+  }
+
+  /** Opens the New view dialog (`initial`: e.g. the selection) or the Edit view dialog. */
+  openViewEditor(state: ViewEditorState): void {
+    this.set({ viewEditor: state });
+  }
+
+  closeViewEditor(): void {
+    if (this.state.viewEditor) this.set({ viewEditor: null });
+  }
+
+  /** Creates view `name` and shows it. */
+  createView(name: string, d: ViewDefinition): boolean {
+    const op = createOp(name, d);
+    if (!this.syncViews([op])) {
+      this.toast('error', `Could not create the view ${op.name}.`);
+      return false;
+    }
+    this.setView(op.name);
+    return true;
+  }
+
+  /** Renames and/or changes view `name`; true also when nothing had to change. */
+  updateView(name: string, newName: string, d: ViewDefinition): boolean {
+    const before = this.viewDefinitionOf(name);
+    if (!before) return false;
+    const op = updateOp(name, before, newName, d);
+    if (!op) return true;
+    if (this.syncViews([op])) return true;
+    this.toast('error', `Could not change the view ${name}; edit it in code.`);
+    return false;
+  }
+
+  /** Delete view… : asks, then removes the block and its layout entry (one layout step). */
+  async requestDeleteView(name: string): Promise<boolean> {
+    const ok = await this.confirm(
+      `Delete the view ${name}?`,
+      'The DiagramView block is removed from the code and its saved positions from the layout. Undo in the code brings the block back.',
+      'Delete view',
+      true,
+    );
+    if (!ok) return false;
+    return this.syncViews([{ op: 'delete', name }]);
+  }
+
+  /** Node menu ▸ Add to view ▸ `name`. */
+  addToView(name: string, ids: string[]): boolean {
+    const model = this.state.compile.model;
+    const d = this.viewDefinitionOf(name);
+    if (!model || !d) return false;
+    const op = addToViewOp(model, d, name, ids);
+    if (!op) {
+      this.toast('info', `Already in ${name}.`);
+      return false;
+    }
+    return this.syncViews([op]);
+  }
+
+  /** Node menu ▸ Remove from view (the open named view). */
+  removeFromView(ids: string[]): boolean {
+    const name = this.state.ws.view;
+    const model = this.state.compile.model;
+    const d = name === DEFAULT_VIEW ? null : this.viewDefinitionOf(name);
+    if (!model || !d) return false;
+    const op = removeFromViewOp(model, d, name, ids);
+    if (!op) return false;
+    if (this.syncViews([op])) {
+      this.canvas?.setSelection([]);
+      return true;
+    }
+    this.toast('error', `Could not change the view ${name}; edit it in code.`);
+    return false;
+  }
+
+  // --- groups (design phase3 §6.6) -----------------------------------------------------------
+
+  /** Groups of the open view (those the canvas draws). */
+  viewGroupIds(): string[] {
+    const model = this.state.compile.model;
+    if (!model) return [];
+    const view = model.views.find((v) => v.name === this.state.ws.view);
+    const ids = model.groups.map((g) => g.id);
+    return view ? ids.filter((id) => view.groupIds.includes(id)) : ids;
+  }
+
+  /** Collapse all groups / Expand all (Auto-layout menu): one 'settings' layout step. */
+  setAllGroupsCollapsed(collapsed: boolean): void {
+    const layout = this.state.ws.layout;
+    const view = this.state.ws.view;
+    const ids = this.viewGroupIds().filter(
+      (id) => (nodeEntry(layout, view, id)?.collapsed === true) !== collapsed,
+    );
+    if (ids.length) this.history.batch(() => this.canvas?.setNodeSettings(ids, { collapsed }));
+  }
+
+  /** A layout change made by a store action: one history step, like a canvas change. */
+  private commitLayout(next: Layout): void {
+    this.history.push(next);
+    this.state = { ...this.state, ws: { ...this.state.ws, layout: next }, userTouched: true };
+    this.set(
+      {
+        layoutDirty: this.computeLayoutDirty(),
+        canUndo: this.history.canUndo(),
+        canRedo: this.history.canRedo(),
+        saveState: 'unsaved',
+      },
+      true,
+    );
+    this.updateTitle();
+  }
+
+  /** Places the note addNote(at) created once the model has it. */
+  private placePendingNote(): void {
+    const p = this.pendingPlacement;
+    const model = this.state.compile.model;
+    if (!p || !model) return;
+    if (p.wsId !== this.state.ws.id) {
+      this.pendingPlacement = null;
+      return;
+    }
+    if (!model.stickyNotes.some((n) => `note:${n.name}` === p.id)) return;
+    this.pendingPlacement = null;
+    // Written into the layout in the same tick as the model that has the note, so the canvas
+    // never sees it unplaced (what DiagramCanvasHandle.placeNodes would do one render later).
+    this.commitLayout(
+      setNodePositions(this.state.ws.layout ?? emptyLayout(), this.state.ws.view, {
+        [p.id]: p.at,
+      }),
+    );
   }
 
   // --- autosave ------------------------------------------------------------------------------
@@ -1767,6 +2474,7 @@ export class EditorStore {
         tab: s.tab,
         activeFile: s.activeFile,
         ...(this.canvas ? { viewport: this.canvas.getViewport() } : {}),
+        ...(s.focus ? { focus: s.focus } : {}),
       },
     };
     try {

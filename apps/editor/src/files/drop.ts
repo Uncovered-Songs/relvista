@@ -1,9 +1,11 @@
 /**
  * Drag-and-drop of files and folders: File System Access handles when the browser offers them
- * (`getAsFileSystemHandle`), else `webkitGetAsEntry` (folders) or plain files.
+ * (`getAsFileSystemHandle`), else `webkitGetAsEntry` (folders) or plain files. A dropped `.sql`
+ * file comes through as well: the store opens it in the SQL import dialog.
  */
 import { walkDirectoryHandle, type WalkedFile } from './folder.js';
 import { LIMITS, LimitError } from './limits.js';
+import { isSqlName } from '../sql/dialect.js';
 import { isDbmlName, isSidecarName } from './sidecar.js';
 
 export type DropResult =
@@ -42,7 +44,7 @@ export function readDrop(dt: DataTransfer): Promise<DropResult> {
     if (dirEntry)
       return { kind: 'folder-files', name: dirEntry.name, files: await walkEntry(dirEntry) };
     const out: WalkedFile[] = files
-      .filter((f) => isDbmlName(f.name) || isSidecarName(f.name))
+      .filter((f) => isDbmlName(f.name) || isSidecarName(f.name) || isSqlName(f.name))
       .map((f) => ({
         path: f.name,
         size: f.size,

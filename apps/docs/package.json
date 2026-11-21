@@ -4,9 +4,10 @@
   "private": true,
   "scripts": {
     "sync": "node scripts/sync-assets.mjs",
-    "prestart": "node scripts/sync-assets.mjs",
+    "api-docs": "node scripts/api-docs.mjs",
+    "prestart": "node scripts/sync-assets.mjs && node scripts/api-docs.mjs",
     "start": "docusaurus start",
-    "build": "node scripts/sync-assets.mjs && docusaurus build && node scripts/copy-editor.mjs",
+    "build": "node scripts/sync-assets.mjs && node scripts/api-docs.mjs && docusaurus build && node scripts/folder-pages.mjs && node scripts/copy-editor.mjs",
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc --noEmit",
@@ -27,6 +28,7 @@
     "react-dom": "^19"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
     "@docusaurus/module-type-aliases": "3.10.2",
     "@docusaurus/theme-classic": "3.10.2",
     "@docusaurus/tsconfig": "3.10.2",
@@ -35,6 +37,8 @@
     "@types/node": "^24",
     "@types/react": "^19",
     "relvista-editor": "workspace:*",
+    "typedoc": "0.28.20",
+    "typedoc-plugin-markdown": "4.14.1",
     "typescript": "~5.9.3"
   },
   "browserslist": {

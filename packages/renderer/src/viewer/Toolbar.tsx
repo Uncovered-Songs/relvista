@@ -1,6 +1,7 @@
-import { DEFAULT_VIEW } from '@relvista/core';
+import { DEFAULT_VIEW, type DetailLevel } from '@relvista/core';
 import {
   useEffect,
+  useLayoutEffect,
   useRef,
   useState,
   type KeyboardEvent as ReactKeyboardEvent,
@@ -8,7 +9,9 @@ import {
   type ReactNode,
   type Ref,
 } from 'react';
+import { DETAIL_LEVELS } from '../nav/DetailSwitch.js';
 import {
+  CheckIcon,
   ChevronIcon,
   CollapseIcon,
   DownloadIcon,
@@ -16,25 +19,43 @@ import {
   ExternalIcon,
   FitIcon,
   LayersIcon,
+  LinkIcon,
   PrintIcon,
+  RowsIcon,
+  SearchIcon,
   ZoomInIcon,
   ZoomOutIcon,
 } from './icons.js';
 
+/** A viewer toolbar button. */
 export type ToolbarItem =
-  'zoom' | 'fit' | 'fullscreen' | 'export' | 'print' | 'view' | 'open-in-editor';
+  | 'view'
+  | 'search'
+  | 'detail'
+  | 'zoom'
+  | 'fit'
+  | 'fullscreen'
+  | 'export'
+  | 'print'
+  | 'link'
+  | 'open-in-editor';
 
+/** Every toolbar item, in the default order (docs/design/phase3-v1.md §4.7). */
 export const DEFAULT_TOOLBAR: ToolbarItem[] = [
   'view',
+  'search',
+  'detail',
   'zoom',
   'fit',
   'fullscreen',
   'export',
   'print',
+  'link',
   'open-in-editor',
 ];
 
-export type ExportKind = 'svg' | 'png';
+/** 'pdf' opens the PDF dialog. */
+export type ExportKind = 'svg' | 'png' | 'pdf';
 
 export interface ToolbarProps {
   items: readonly ToolbarItem[];
@@ -49,6 +70,16 @@ export interface ToolbarProps {
   view: string;
   onViewChange(view: string): void;
   editorHref: string | null;
+  /** 'search': opens the search panel. Without it the button is hidden. */
+  onSearch?(): void;
+  searchOpen?: boolean;
+  /** 'detail': the current level and its setter. Without `onDetailChange` the menu is hidden. */
+  detail?: DetailLevel;
+  onDetailChange?(level: DetailLevel): void;
+  /** 'link': copies a link to the diagram's current state. Without it the button is hidden. */
+  onCopyLink?(): void;
+  /** Offer "PDF…" in the export menu. Default true. */
+  pdf?: boolean;
 }
 
 function Button({
@@ -60,16 +91,19 @@ function Button({
   popup,
   buttonRef,
   item,
+  shortcut,
 }: {
   title: string;
   onClick(): void;
   children: ReactNode;
   pressed?: boolean;
   expanded?: boolean;
-  popup?: 'menu';
+  popup?: 'menu' | 'dialog';
   buttonRef?: Ref<HTMLButtonElement>;
   /** Toolbar item this button belongs to (CSS hides some in narrow viewers). */
   item?: ToolbarItem;
+  /** aria-keyshortcuts value. */
+  shortcut?: string;
 }): ReactElement {
   return (
     <button
@@ -78,10 +112,11 @@ function Button({
       type="button"
       className="rv-tb-button"
       title={title}
-      aria-label={title}
+      aria-label={title.replace(/ \(.*\)$/, '')}
       aria-pressed={pressed}
       aria-expanded={expanded}
       aria-haspopup={popup}
+      aria-keyshortcuts={shortcut}
       onClick={onClick}
     >
       {children}
@@ -89,27 +124,57 @@ function Button({
   );
 }
 
-export function Toolbar(p: ToolbarProps): ReactElement {
-  const has = (i: ToolbarItem) => p.items.includes(i);
-  const [menu, setMenu] = useState(false);
-  const menuRef = useRef<HTMLDivElement>(null);
-  const exportButton = useRef<HTMLButtonElement>(null);
+const MENU_ITEMS = '[role="menuitem"], [role="menuitemradio"]';
 
+/**
+ * A toolbar button with a menu: focus lands on the checked (or first) item when it opens; arrow
+ * keys / Home / End move, Esc closes and returns to the button, Tab or a click outside closes.
+ */
+function MenuButton({
+  title,
+  label,
+  icon,
+  item,
+  children,
+}: {
+  title: string;
+  label: string;
+  icon: ReactNode;
+  item: ToolbarItem;
+  children(close: () => void): ReactNode;
+}): ReactElement {
+  const [open, setOpen] = useState(false);
+  const wrap = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  // The menu hangs from the button's right edge; in a narrow viewer it would pass the viewer's
+  // left edge, so it is shifted right to stay 8 px inside.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const menu = wrap.current?.querySelector<HTMLElement>('[role="menu"]');
+    const viewer = wrap.current?.closest('.rv-viewer');
+    if (!menu || !viewer) return;
+    menu.style.transform = '';
+    const overflow = viewer.getBoundingClientRect().left + 8 - menu.getBoundingClientRect().left;
+    if (overflow > 0) menu.style.transform = `translateX(${Math.ceil(overflow)}px)`;
+  }, [open]);
   useEffect(() => {
-    if (!menu) return;
-    // Focus the first item when the menu opens (keyboard users land in it).
-    menuRef.current?.querySelector<HTMLElement>('[role="menuitem"]')?.focus();
+    if (!open) return;
+    const menu = wrap.current?.querySelector('[role="menu"]');
+    const target =
+      menu?.querySelector<HTMLElement>('[aria-checked="true"]') ??
+      menu?.querySelector<HTMLElement>(MENU_ITEMS);
+    target?.focus();
     const onMouse = (e: MouseEvent) => {
-      if (menuRef.current?.contains(e.target as globalThis.Node)) return;
-      setMenu(false);
+      if (wrap.current?.contains(e.target as globalThis.Node)) return;
+      setOpen(false);
     };
     // Capture phase, so the menu sees Esc before the fullscreen overlay does; preventDefault
     // tells the overlay this press is taken (one layer closes per press).
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       e.preventDefault();
-      setMenu(false);
-      exportButton.current?.focus();
+      setOpen(false);
+      button.current?.focus();
     };
     document.addEventListener('mousedown', onMouse);
     document.addEventListener('keydown', onKey, true);
@@ -117,13 +182,10 @@ export function Toolbar(p: ToolbarProps): ReactElement {
       document.removeEventListener('mousedown', onMouse);
       document.removeEventListener('keydown', onKey, true);
     };
-  }, [menu]);
+  }, [open]);
 
-  /** Arrow keys / Home / End move between menu items. */
   const onMenuKey = (e: ReactKeyboardEvent<HTMLDivElement>) => {
-    const items = Array.from(
-      menuRef.current?.querySelectorAll<HTMLElement>('[role="menuitem"]') ?? [],
-    );
+    const items = Array.from(wrap.current?.querySelectorAll<HTMLElement>(MENU_ITEMS) ?? []);
     if (!items.length) return;
     const i = items.indexOf(document.activeElement as HTMLElement);
     let next = -1;
@@ -131,11 +193,78 @@ export function Toolbar(p: ToolbarProps): ReactElement {
     else if (e.key === 'ArrowUp') next = (i - 1 + items.length) % items.length;
     else if (e.key === 'Home') next = 0;
     else if (e.key === 'End') next = items.length - 1;
-    else if (e.key === 'Tab') setMenu(false);
+    else if (e.key === 'Tab') setOpen(false);
+    // Arrow keys stay in the menu (the toolbar's own arrow keys do not apply here).
+    if (e.key.startsWith('Arrow')) e.stopPropagation();
     if (next >= 0) {
       e.preventDefault();
       items[next]!.focus();
     }
+  };
+
+  const close = () => {
+    setOpen(false);
+    button.current?.focus();
+  };
+  return (
+    <div className="rv-tb-menu-wrap" ref={wrap}>
+      <Button
+        title={title}
+        item={item}
+        expanded={open}
+        popup="menu"
+        buttonRef={button}
+        onClick={() => setOpen((m) => !m)}
+      >
+        {icon}
+      </Button>
+      {open ? (
+        <div className="rv-tb-menu" role="menu" aria-label={label} onKeyDown={onMenuKey}>
+          {children(close)}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function MenuItem({ onSelect, children }: { onSelect(): void; children: ReactNode }) {
+  return (
+    <button type="button" role="menuitem" tabIndex={-1} onClick={onSelect}>
+      {children}
+    </button>
+  );
+}
+
+/** Controls of the toolbar the arrow keys move between (menus and the view select excluded). */
+const CONTROLS = '.rv-tb-button, .rv-tb-select select';
+
+export function Toolbar(p: ToolbarProps): ReactElement {
+  const has = (i: ToolbarItem) => p.items.includes(i);
+  const root = useRef<HTMLDivElement>(null);
+
+  /** ArrowLeft / ArrowRight / Home / End between the toolbar's buttons (Tab still works). */
+  const onKeyDown = (e: ReactKeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    const t = e.target as HTMLElement;
+    // Inside a menu, or on the view select (arrow keys change its value on some platforms).
+    if (t.closest('[role="menu"]') || t.tagName === 'SELECT') return;
+    // Buttons narrow viewers hide (display: none) are skipped.
+    const items = Array.from(root.current?.querySelectorAll<HTMLElement>(CONTROLS) ?? []).filter(
+      (el) => el === t || getComputedStyle(el).display !== 'none',
+    );
+    const i = items.indexOf(t);
+    if (i < 0) return;
+    const n = items.length;
+    const next =
+      e.key === 'ArrowRight'
+        ? (i + 1) % n
+        : e.key === 'ArrowLeft'
+          ? (i - 1 + n) % n
+          : e.key === 'Home'
+            ? 0
+            : n - 1;
+    e.preventDefault();
+    items[next]!.focus();
   };
 
   const groups: ReactNode[] = [];
@@ -159,6 +288,66 @@ export function Toolbar(p: ToolbarProps): ReactElement {
       </label>,
     );
   }
+
+  const find: ReactNode[] = [];
+  if (has('search') && p.onSearch) {
+    find.push(
+      <Button
+        key="search"
+        title="Search (/)"
+        item="search"
+        shortcut="/ Control+K Meta+K"
+        expanded={!!p.searchOpen}
+        onClick={p.onSearch}
+      >
+        <SearchIcon />
+      </Button>,
+    );
+  }
+  if (has('detail') && p.onDetailChange) {
+    const current = p.detail ?? 'all';
+    find.push(
+      <MenuButton
+        key="detail"
+        title="Detail level"
+        label="Detail level"
+        item="detail"
+        icon={<RowsIcon />}
+      >
+        {(close) =>
+          DETAIL_LEVELS.map((d) => (
+            <button
+              key={d.value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={d.value === current}
+              tabIndex={-1}
+              className="rv-tb-menu-radio"
+              onClick={() => {
+                close();
+                p.onDetailChange?.(d.value);
+              }}
+            >
+              <span className="rv-tb-menu-check" aria-hidden="true">
+                {d.value === current ? <CheckIcon /> : null}
+              </span>
+              <span>
+                {d.label}
+                <small>{d.hint}</small>
+              </span>
+            </button>
+          ))
+        }
+      </MenuButton>,
+    );
+  }
+  if (find.length)
+    groups.push(
+      <div key="find" className="rv-tb-group">
+        {find}
+      </div>,
+    );
+
   const nav: ReactNode[] = [];
   if (has('zoom')) {
     nav.push(
@@ -172,7 +361,7 @@ export function Toolbar(p: ToolbarProps): ReactElement {
   }
   if (has('fit')) {
     nav.push(
-      <Button key="fit" title="Fit to view" onClick={p.onFit}>
+      <Button key="fit" title="Fit to view" item="fit" onClick={p.onFit}>
         <FitIcon />
       </Button>,
     );
@@ -182,6 +371,7 @@ export function Toolbar(p: ToolbarProps): ReactElement {
       <Button
         key="fs"
         title={p.fullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+        item="fullscreen"
         pressed={p.fullscreen}
         onClick={p.onToggleFullscreen}
       >
@@ -199,43 +389,38 @@ export function Toolbar(p: ToolbarProps): ReactElement {
   const out: ReactNode[] = [];
   if (has('export')) {
     out.push(
-      <div key="export" className="rv-tb-menu-wrap" ref={menuRef}>
-        <Button
-          title="Export"
-          expanded={menu}
-          popup="menu"
-          buttonRef={exportButton}
-          onClick={() => setMenu((m) => !m)}
-        >
-          <DownloadIcon />
-        </Button>
-        {menu ? (
-          <div className="rv-tb-menu" role="menu" aria-label="Export" onKeyDown={onMenuKey}>
-            <button
-              type="button"
-              role="menuitem"
-              tabIndex={-1}
-              onClick={() => {
-                setMenu(false);
+      <MenuButton key="export" title="Export" label="Export" item="export" icon={<DownloadIcon />}>
+        {(close) => (
+          <>
+            <MenuItem
+              onSelect={() => {
+                close();
                 p.onExport('svg');
               }}
             >
               Download SVG
-            </button>
-            <button
-              type="button"
-              role="menuitem"
-              tabIndex={-1}
-              onClick={() => {
-                setMenu(false);
+            </MenuItem>
+            <MenuItem
+              onSelect={() => {
+                close();
                 p.onExport('png');
               }}
             >
               Download PNG
-            </button>
-          </div>
-        ) : null}
-      </div>,
+            </MenuItem>
+            {p.pdf !== false ? (
+              <MenuItem
+                onSelect={() => {
+                  close();
+                  p.onExport('pdf');
+                }}
+              >
+                PDF…
+              </MenuItem>
+            ) : null}
+          </>
+        )}
+      </MenuButton>,
     );
   }
   if (has('print')) {
@@ -245,11 +430,19 @@ export function Toolbar(p: ToolbarProps): ReactElement {
       </Button>,
     );
   }
+  if (has('link') && p.onCopyLink) {
+    out.push(
+      <Button key="link" title="Copy link to this diagram" item="link" onClick={p.onCopyLink}>
+        <LinkIcon />
+      </Button>,
+    );
+  }
   if (has('open-in-editor') && p.editorHref) {
     out.push(
       <a
         key="edit"
         className="rv-tb-button"
+        data-rv-item="open-in-editor"
         href={p.editorHref}
         target="_blank"
         rel="noopener noreferrer"
@@ -268,7 +461,13 @@ export function Toolbar(p: ToolbarProps): ReactElement {
     );
 
   return (
-    <div className="rv-toolbar nodrag nopan" role="toolbar" aria-label="Diagram tools">
+    <div
+      ref={root}
+      className="rv-toolbar nodrag nopan"
+      role="toolbar"
+      aria-label="Diagram tools"
+      onKeyDown={onKeyDown}
+    >
       {groups}
     </div>
   );

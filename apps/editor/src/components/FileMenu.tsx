@@ -34,6 +34,15 @@ export function openMenuItems(): MenuItem[] {
     });
   }
   items.push({
+    id: 'compare',
+    label: s.compare ? 'Compare with another version…' : 'Compare…',
+    shortcut: mod('D', { alt: true }),
+    separator: true,
+    disabled: !s.compile.model,
+    title: s.compile.model ? undefined : 'There is no schema to compare yet',
+    onSelect: () => store.openDialog({ kind: 'compare' }),
+  });
+  items.push({
     id: 'restore',
     label: 'Restore previous session',
     separator: true,
@@ -45,6 +54,6 @@ export function openMenuItems(): MenuItem[] {
 }
 
 export function FileMenu(): ReactElement {
-  useEditor((s) => s.recent.length + (s.hasPrevious ? 1 : 0));
+  useEditor((s) => s.recent.length + (s.hasPrevious ? 1 : 0) + (s.compile.model ? 2 : 0));
   return <MenuButton label="Open" items={openMenuItems} />;
 }

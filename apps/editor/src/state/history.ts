@@ -1,11 +1,18 @@
 /**
  * Layout undo/redo: snapshots of the whole `Layout` (immutable, so snapshots are cheap shares).
- * 'move' / 'auto-layout' / 'settings' push; 'place' and renames amend the current entry (they are
- * not user edits); opening a document clears the stack.
+ * 'move' / 'auto-layout' / 'settings' / 'resize' push; 'place' and renames amend the current entry
+ * (they are not user edits); opening a document clears the stack. `batch` merges the pushes of one
+ * user action (deleting notes, deleting or renaming a view) into one step.
  */
 import type { Layout } from '@relvista/core';
+import type { LayoutChange } from '@relvista/renderer';
 
 export const HISTORY_CAP = 200;
+
+/** How a canvas layout change enters the history: a user edit pushes, auto-placement amends. */
+export function historyActionOf(kind: LayoutChange['kind']): 'push' | 'amend' {
+  return kind === 'place' ? 'amend' : 'push';
+}
 
 export class LayoutHistory {
   private past: Array<Layout | null> = [];
@@ -13,6 +20,9 @@ export class LayoutHistory {
   private present: Layout | null = null;
   /** Older entries were dropped at the cap: the layout at open is no longer known. */
   private trimmed = false;
+  /** Depth of nested `batch` calls, and whether the open batch already pushed its step. */
+  private batchDepth = 0;
+  private batchPushed = false;
 
   constructor(
     initial: Layout | null = null,
@@ -42,8 +52,16 @@ export class LayoutHistory {
     return this.future.length > 0;
   }
 
-  /** A user edit: the previous layout becomes undoable. */
+  /** A user edit: the previous layout becomes undoable. Inside `batch`, merged into one step. */
   push(next: Layout | null): void {
+    if (this.batchDepth > 0) {
+      if (this.batchPushed) {
+        this.present = next;
+        this.future = [];
+        return;
+      }
+      this.batchPushed = true;
+    }
     this.past.push(this.present);
     if (this.past.length > this.cap) {
       this.past.splice(0, this.past.length - this.cap);
@@ -62,6 +80,21 @@ export class LayoutHistory {
     if (transform) {
       this.past = this.past.map(transform);
       this.future = this.future.map(transform);
+    }
+  }
+
+  /**
+   * Runs `fn`; every `push` it makes (directly or through canvas callbacks it triggers) becomes
+   * one undo step: undo returns to the layout before the first of them.
+   */
+  batch<T>(fn: () => T): T {
+    if (this.batchDepth === 0) this.batchPushed = false;
+    this.batchDepth++;
+    try {
+      return fn();
+    } finally {
+      this.batchDepth--;
+      if (this.batchDepth === 0) this.batchPushed = false;
     }
   }
 

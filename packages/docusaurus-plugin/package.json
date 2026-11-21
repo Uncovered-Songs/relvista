@@ -2,13 +2,37 @@
   "name": "@relvista/docusaurus-plugin",
   "version": "0.0.0",
   "description": "Docusaurus plugin that adds interactive ER diagrams for DBML code fences and .dbml files, keeping your site's own styling",
+  "keywords": [
+    "docusaurus",
+    "docusaurus-plugin",
+    "dbml",
+    "dbdiagram",
+    "erd",
+    "er-diagram",
+    "entity-relationship",
+    "database",
+    "schema",
+    "diagram"
+  ],
+  "homepage": "https://relvista.github.io/relvista/docs/getting-started",
+  "bugs": {
+    "url": "https://github.com/relvista/relvista/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/relvista/relvista.git",
+    "directory": "packages/docusaurus-plugin"
+  },
   "license": "MIT",
+  "author": "relvista contributors",
   "type": "module",
-  "main": "./lib/index.js",
-  "types": "./lib/index.d.ts",
+  "sideEffects": [
+    "**/*.css"
+  ],
   "exports": {
     ".": {
       "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
       "default": "./lib/index.js"
     },
     "./client": {
@@ -16,39 +40,39 @@
     },
     "./package.json": "./package.json"
   },
+  "main": "./lib/index.js",
+  "types": "./lib/index.d.ts",
   "files": [
     "lib",
-    "src",
-    "client.d.ts"
+    "src/theme",
+    "client.d.ts",
+    "README.md",
+    "LICENSE"
   ],
-  "sideEffects": [
-    "**/*.css"
-  ],
-  "keywords": [
-    "docusaurus",
-    "docusaurus-plugin",
-    "dbml",
-    "erd",
-    "er-diagram",
-    "database"
-  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "scripts": {
     "build": "node -e \"require('fs').rmSync('lib',{recursive:true,force:true})\" && tsc -p tsconfig.build.json && node scripts/copy-assets.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run"
+  },
+  "peerDependencies": {
+    "@docusaurus/core": "^3.6.0",
+    "@docusaurus/utils-validation": "^3.6.0",
+    "react": "^18.0.0 || ^19.0.0",
+    "react-dom": "^18.0.0 || ^19.0.0",
+    "prism-react-renderer": "^2.0.0"
   },
   "dependencies": {
     "@relvista/core": "workspace:*",
     "@relvista/renderer": "workspace:*",
     "elkjs": "0.12.1",
     "@babel/core": "^7.29.0"
-  },
-  "peerDependencies": {
-    "@docusaurus/core": "^3.6",
-    "@docusaurus/utils-validation": "^3.6",
-    "react": ">=18",
-    "react-dom": ">=18",
-    "prism-react-renderer": "^2"
   },
   "devDependencies": {
     "@docusaurus/core": "3.10.2",
@@ -67,11 +91,5 @@
     "prism-react-renderer": "^2.4.1",
     "@types/node": "^24",
     "@types/babel__core": "^7.20.5"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/Uncovered-Songs/relvista.git",
-    "directory": "packages/docusaurus-plugin"
-  },
-  "homepage": "https://uncovered-songs.github.io/relvista/"
+  }
 }

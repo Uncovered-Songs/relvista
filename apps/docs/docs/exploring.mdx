@@ -1,0 +1,197 @@
+---
+sidebar_position: 1.7
+title: Exploring diagrams
+description: Search a diagram, find the relationship path between two tables, change the detail level, focus on related tables, and link straight to any of it.
+---
+
+import DbmlDiagram from '@theme/DbmlDiagram';
+
+export const shop = `Table users {
+  id integer [pk]
+  email varchar [unique, not null]
+  country_code char(2) [ref: > countries.code]
+  created_at timestamp
+}
+
+Table countries {
+code char(2) [pk]
+name varchar
+}
+
+Table orders {
+id integer [pk]
+user_id integer [ref: > users.id]
+status varchar
+created_at timestamp
+}
+
+Table order_items {
+order_id integer [ref: > orders.id]
+product_id integer [ref: > products.id]
+quantity integer
+unit_price decimal(10,2)
+
+indexes {
+(order_id, product_id) [pk]
+}
+}
+
+Table products {
+id integer [pk]
+merchant_id integer [ref: > merchants.id]
+name varchar
+price decimal(10,2)
+}
+
+Table merchants {
+id integer [pk]
+name varchar
+country_code char(2) [ref: > countries.code]
+}
+
+Table payments {
+id integer [pk]
+order_id integer [ref: > orders.id]
+amount decimal(10,2)
+paid_at timestamp
+}
+
+Table invoices {
+id integer [pk]
+order_id integer [ref: > orders.id]
+number varchar [unique]
+}
+
+Table tags {
+id integer [pk]
+label varchar
+}
+
+DiagramView sales {
+Tables {
+users
+orders
+order_items
+products
+payments
+}
+}`;
+
+Every diagram on this site — and in your docs with the plugin — is more than a picture. You can
+search it, light up how two tables are related, hide columns, focus on the neighbourhood of one
+table, and share a link that opens it exactly where you are. Everything has a keyboard path.
+
+<DbmlDiagram value={shop} title="Shop" height={560} id="shop" />
+
+## Search
+
+Press the **magnifier** in the toolbar, or <kbd>/</kbd> or <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>K</kbd>
+with the diagram focused. Search finds tables, columns, enums, table groups, sticky notes and views
+as you type, and tones the matches while dimming the rest. Use the arrow keys to move through the
+results and <kbd>Enter</kbd> to pick one: the diagram moves to that table and lights it and its
+relationships (a column lights its row too). <kbd>Esc</kbd> closes the panel.
+
+Try it: <a href="#shop&q=price" data-noBrokenLinkCheck>search the shop diagram for “price”</a>.
+
+## Relationship path
+
+Switch the search panel to **Path** and choose two tables. relvista finds the shortest chain of
+foreign keys between them, lights the tables and refs on it, fits it on screen, and lists the hops
+("users → countries → merchants → products, 3 refs"). When several chains are equally short, it
+takes the one through the tables declared first. Two tables with no chain of refs between them say
+so ("No relationship path between users and tags").
+
+Try it: <a href="#shop&path=users~products" data-noBrokenLinkCheck>the path from users to
+products</a>, or <a href="#shop&path=users~tags" data-noBrokenLinkCheck>users and tags</a>, which
+are not related.
+
+## Detail level
+
+The **Detail level** menu (the rows icon) shows **All** columns, only **Keys** (primary and foreign
+keys, the columns refs attach to) or table **Names** only. Large schemas read best as names first;
+the layout does not move when you switch.
+
+To start a diagram at another level, add `detail=keys` (or `names`) to a fence, pass
+`detailLevel="keys"` to the component, or set `themeConfig.dbml.detailLevel` for the whole site.
+Try <a href="#shop&detail=names" data-noBrokenLinkCheck>the shop diagram with names only</a>.
+
+## Focus on related tables
+
+Click a table (or <kbd>Tab</kbd> to it and press <kbd>Enter</kbd>) to open its card, then
+**Show related**: only the tables within one ref of it stay, pulled in around it (each keeps its
+direction from the table, so the picture still looks like the diagram) and fitted on screen; the
+saved positions do not change, and tables cannot be dragged until you leave. The chip at the top
+("Related to orders · 1 hop") has **−** and **+** to widen or narrow the circle (up to 5 hops) and
+**✕** to leave; <kbd>Esc</kbd> leaves too.
+
+Try <a href="#shop&table=orders&hops=1" data-noBrokenLinkCheck>orders and its neighbours</a>.
+
+## Deep links
+
+Every diagram has an **anchor**, the `id` of its box on the page: `#shop` scrolls to the diagram
+above, like a heading link. After the anchor, a link can say what the diagram should show:
+
+| Key      | Example               | Opens the diagram…                                  |
+| -------- | --------------------- | --------------------------------------------------- |
+| `view`   | `view=sales`          | in a [DiagramView](./views.mdx)                     |
+| `table`  | `table=orders`        | centred on a table, lit with its relationships      |
+| `hops`   | `table=orders&hops=2` | focused on that table's neighbourhood (0 to 5 hops) |
+| `detail` | `detail=keys`         | at a detail level: `all`, `keys` or `names`         |
+| `vp`     | `vp=120,-40,0.8`      | at an exact position and zoom (x, y, zoom)          |
+| `q`      | `q=price`             | with the search panel open on that query            |
+| `path`   | `path=users~products` | with the relationship path between two tables lit   |
+
+Keys combine: <a href="#shop&view=sales&table=orders" data-noBrokenLinkCheck>`#shop&view=sales&table=orders`</a>
+opens the `sales` view centred on `orders`. Tables are written as in the DBML (`orders`,
+`billing.invoices`, or an alias); invalid values are ignored rather than breaking the page. Links
+work from other pages too: `/docs/exploring#shop&table=payments`.
+
+### Copying a link
+
+The toolbar's **link** button (**Copy link to this diagram**) copies a link to the diagram as you
+see it — its view, the table you picked, focus, detail level, search or path, and the position —
+and says “Link copied”. From then on, and whenever the page was opened with a link to that
+diagram, the address bar follows what you do in it, without adding history entries, so the
+browser's address is always a link back. Other diagrams on the page never change the address,
+and links to headings work as usual.
+
+### Choosing the anchor
+
+The anchor is, in order:
+
+1. the `id` you give: `id="billing"` on a fence, `id="billing"` on the component;
+2. `diagram-` and the title as a heading slug: `title="Shop"` gives `#diagram-shop` (the prefix
+   keeps it apart from a `## Shop` heading on the same page, whose anchor is `#shop`);
+3. otherwise `diagram-` and 8 hex digits computed from the DBML and the view, which stays the
+   same from build to build as long as the diagram does not change.
+
+Give an `id` when you link to a diagram from elsewhere, or when two diagrams on a page share a
+title: the build warns when two diagrams on one page end up with the same anchor, and the
+browser console when a diagram's anchor is also the `id` of another element. Anchors are registered with Docusaurus' broken-link check, so `[the shop](#shop)` passes it.
+
+:::note Links with keys and the broken-anchor check
+
+Docusaurus reads everything after `#` as the anchor, so with `onBrokenAnchors: 'throw'` a Markdown
+link such as `[orders](#shop&table=orders)` fails the build. Write those links as
+`<a href="#shop&table=orders" data-noBrokenLinkCheck>orders</a>`, as this page does.
+
+:::
+
+### In the editor
+
+The [editor](./editor.md#deep-links) reads the same keys from its own address
+(`/relvista/editor/#view=sales&table=orders`), keeps them up to date while you work, and its
+**Share** dialog can include the position. The **Open in editor** button of a docs diagram carries
+the current view and table along with the DBML.
+
+## Keyboard
+
+With the diagram focused (click it, or <kbd>Tab</kbd> to it):
+
+| Keys                                                      | Action                                                                                      |
+| --------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| <kbd>/</kbd>, <kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>K</kbd> | Search                                                                                      |
+| <kbd>Tab</kbd>                                            | Move to the toolbar, then from table to table                                               |
+| <kbd>←</kbd> <kbd>→</kbd> <kbd>Home</kbd> <kbd>End</kbd>  | Move between toolbar buttons                                                                |
+| <kbd>Enter</kbd> / <kbd>Space</kbd>                       | Open or close the focused table's card                                                      |
+| <kbd>Esc</kbd>                                            | Close a menu, the card or search; clear the highlight; leave focus mode, one step per press |

@@ -1,0 +1,269 @@
+/*
+ * Canvas editing (design phase3 §6.4–§6.7): the sticky-note editor, the colour palette, the views
+ * switcher and dialog, the Note toolbar button. Tokens from styles/tokens.css (light and dark).
+ */
+
+/* --- toolbar ----------------------------------------------------------------------------- */
+
+.ed-iconbtn.ed-notebtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  width: auto;
+  padding: 0 8px 0 6px;
+  font: inherit;
+  font-weight: 500;
+}
+
+.ed-diagram .rv-canvas:focus {
+  outline: none;
+}
+
+.ed-diagram .rv-canvas:focus-visible {
+  outline: 2px solid var(--ed-focus);
+  outline-offset: -2px;
+}
+
+/* --- context menus ----------------------------------------------------------------------- */
+
+.ed-nodemenu .ed-menu--sub {
+  z-index: 61;
+}
+
+.ed-nodemenu--flip .ed-menu--sub {
+  left: auto;
+  right: calc(100% + 2px);
+}
+
+/* --- colour palette ---------------------------------------------------------------------- */
+
+.ed-colormenu {
+  min-width: 0;
+  width: 172px;
+}
+
+.ed-colormenu__grid {
+  display: grid;
+  grid-template-columns: repeat(4, 32px);
+  gap: 6px;
+  padding: 6px;
+}
+
+.ed-colormenu__swatch {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid rgba(0, 0, 0, 0.18);
+  border-radius: 6px;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.ed-colormenu__swatch:hover {
+  transform: scale(1.06);
+}
+
+.ed-colormenu__swatch:focus-visible {
+  outline: 2px solid var(--ed-focus);
+  outline-offset: 2px;
+}
+
+.ed-colormenu__swatch[aria-checked='true'] {
+  box-shadow:
+    0 0 0 2px var(--ed-surface-raised),
+    0 0 0 4px var(--ed-text);
+}
+
+.ed-colormenu__swatch svg {
+  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.7));
+}
+
+.ed-colormenu__preview {
+  width: 16px;
+  height: 16px;
+  flex: none;
+  border: 1px solid var(--ed-border-strong);
+  border-radius: 50%;
+}
+
+.ed-colormenu__preview[data-custom='false'] {
+  background: conic-gradient(
+    #e5484d,
+    #f5a524,
+    #e9d70b,
+    #30a46c,
+    #12a594,
+    #0091ff,
+    #8e4ec6,
+    #e5484d
+  );
+}
+
+/* The native picker behind Custom…: present (Playwright and the picker need a box), not shown. */
+.ed-colormenu__input {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* --- sticky-note editor ------------------------------------------------------------------ */
+
+.ed-noteeditor {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  margin: 0;
+  overflow: hidden;
+  border: 2px solid var(--ed-focus);
+  background: var(--rv-note-bg, #fff7cc);
+  color: var(--rv-note-text, #4a4022);
+  font-family: var(--rv-font, var(--ed-font));
+  font-weight: 400;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  resize: none;
+  box-shadow: var(--ed-shadow-lg);
+}
+
+.ed-noteeditor:focus,
+.ed-noteeditor:focus-visible {
+  outline: none;
+}
+
+/* --- views switcher ---------------------------------------------------------------------- */
+
+.ed-viewmenu {
+  min-width: 240px;
+  max-height: min(70vh, 560px);
+  overflow-y: auto;
+}
+
+.ed-menubutton--right > .ed-viewmenu {
+  left: auto;
+  right: 0;
+}
+
+.ed-viewmenu__filter {
+  padding: 4px 4px 6px;
+}
+
+.ed-viewmenu__filter .ed-input {
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.ed-viewmenu__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ed-viewmenu__empty {
+  padding: 6px 10px 6px 30px;
+  color: var(--ed-muted);
+}
+
+/* --- view editor dialog ------------------------------------------------------------------ */
+
+.ed-viewtree {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+}
+
+.ed-viewtree__section {
+  min-width: 0;
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--ed-border);
+  border-radius: var(--ed-radius);
+}
+
+.ed-viewtree__legend {
+  padding: 0 4px;
+  font-weight: 600;
+}
+
+.ed-viewtree__list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 240px;
+  margin-top: 6px;
+  overflow-y: auto;
+}
+
+/* One schema: its tables are a flat column (several schemas nest them under the schema). */
+.ed-viewtree__rows,
+.ed-viewtree__children {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.ed-viewtree__children {
+  margin: 4px 0 6px 22px;
+}
+
+.ed-viewtree__check {
+  min-height: 24px;
+}
+
+.ed-viewtree__check.is-disabled {
+  color: var(--ed-muted);
+}
+
+.ed-viewtree__hint {
+  margin-left: auto;
+  padding-left: 8px;
+  color: var(--ed-muted);
+  font-family: var(--ed-mono);
+  font-size: 11.5px;
+}
+
+.ed-viewtree__error {
+  color: var(--ed-danger);
+}
+
+@media (max-width: 600px) {
+  /* Icon only, the name stays for assistive technology. */
+  .ed-notebtn__label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .ed-iconbtn.ed-notebtn {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .ed-viewtree {
+    grid-template-columns: 1fr;
+  }
+
+  .ed-colormenu {
+    width: auto;
+  }
+}
+
+/* Touch screens: a long-press opens the canvas menus (diagram/longPress.ts), so the browser's own
+   callout and text selection must not start on it. */
+@media (pointer: coarse) {
+  .ed-diagram .rv-canvas {
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    user-select: none;
+  }
+}

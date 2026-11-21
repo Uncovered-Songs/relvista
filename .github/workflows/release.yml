@@ -1,0 +1,169 @@
+# Releases the @relvista/* packages with Changesets (docs/releasing.md).
+#
+# On every push to main:
+#   - changesets in .changeset/  -> open or update the "Version Packages" pull request
+#     (versions, CHANGELOG.md files; `pnpm version-packages`);
+#   - no changesets, but a version that is not on npm (the merged "Version Packages" pull
+#     request)  -> build, check and publish it with provenance, push git tags, create GitHub
+#     releases;
+#   - otherwise nothing.
+#
+# Publishing authenticates with npm trusted publishing (OIDC: no token stored anywhere). npm can
+# only trust this workflow for a package that already exists, so the very first release (1.0.0)
+# is published by hand with `pnpm release:first`; until then the publish job is skipped with a
+# warning. If an NPM_TOKEN secret is set, npm falls back to it when OIDC is not configured.
+#
+# Forks never run it (the `if` on the first job; every other job needs it).
+name: Release
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Each job asks for what it needs; `id-token: write` only on the publish job.
+permissions: {}
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  select-mode:
+    name: Version or publish?
+    if: github.repository == 'relvista/relvista'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      mode: ${{ steps.select-mode.outputs.mode }}
+      npm-auth: ${{ steps.npm-auth.outputs.route }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm (version from packageManager)
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 'version' when .changeset/ has changesets, 'publish' when a package version is not on npm
+      # yet, 'none' otherwise.
+      - name: Select Changesets mode
+        id: select-mode
+        uses: changesets/action/select-mode@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+
+      # Trusted publishing needs the package to exist on npm (configured per package on
+      # npmjs.com). Before the first manual publish only an NPM_TOKEN secret can publish.
+      - name: Check how npm can be reached
+        id: npm-auth
+        if: steps.select-mode.outputs.mode == 'publish'
+        env:
+          HAS_NPM_TOKEN: ${{ secrets.NPM_TOKEN != '' }}
+        run: |
+          if npm view @relvista/core version > /dev/null 2>&1; then
+            echo "route=trusted-publishing" >> "$GITHUB_OUTPUT"
+          elif [ "$HAS_NPM_TOKEN" = "true" ]; then
+            echo "route=token" >> "$GITHUB_OUTPUT"
+          else
+            echo "route=none" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Not published::@relvista/core is not on npm yet. Publish the first release by hand (pnpm release:first), then add the trusted publisher on npmjs.com: see docs/releasing.md."
+          fi
+
+  version:
+    name: Open the Version Packages pull request
+    needs: select-mode
+    if: needs.select-mode.outputs.mode == 'version'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # commit the version bump to changeset-release/main
+      pull-requests: write # open or update the pull request
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm (version from packageManager)
+        uses: pnpm/action-setup@v6
+
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # `changeset version`, then Prettier on the generated CHANGELOG.md and package.json files.
+      - name: Version packages
+        uses: changesets/action/version@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        with:
+          script: pnpm version-packages
+          commit-message: 'chore(release): version packages'
+          pr-title: 'chore(release): version packages'
+
+  publish:
+    name: Publish to npm
+    needs: select-mode
+    if: needs.select-mode.outputs.mode == 'publish' && needs.select-mode.outputs.npm-auth != 'none'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write # git tags and GitHub releases (through the GitHub API)
+      id-token: write # npm trusted publishing (OIDC) and provenance
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Set up pnpm (version from packageManager)
+        uses: pnpm/action-setup@v6
+
+      # registry-url writes an .npmrc that reads NODE_AUTH_TOKEN: the NPM_TOKEN fallback. With
+      # trusted publishing configured npm exchanges the OIDC token first and needs no secret.
+      - name: Set up Node.js (version from .nvmrc)
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+
+      # Trusted publishing needs npm >= 11.5.1. Not npm 12: `changeset publish` runs
+      # `pnpm publish --no-git-checks`, pnpm 9 passes that flag on to `npm publish`, and npm 12
+      # rejects unknown flags (npm 11 only warns). Revisit when moving to pnpm 10+.
+      - name: Use npm 11
+        run: |
+          npm install -g npm@11.21.3
+          npm --version
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build packages
+        run: pnpm --filter "./packages/*" build
+
+      # publint, arethetypeswrong and relvista's packaging rules on the tarballs npm will receive.
+      - name: Package checks
+        run: pnpm packages:check
+
+      # `changeset publish`: `pnpm publish` of every version not on npm yet, in dependency order,
+      # with provenance (publishConfig.provenance); then git tags and GitHub releases.
+      - name: Publish packages
+        uses: changesets/action/publish@ae32849d5ba541f9ae29e40e22a623bc13562f51 # v2.1.2
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NPM_CONFIG_PROVENANCE: 'true'

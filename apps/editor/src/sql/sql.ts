@@ -3,11 +3,15 @@ import type { ExportFormat, ImportFormat, SqlRequest, SqlResponse } from './sql.
 
 export type { ExportFormat, ImportFormat };
 
-export const EXPORT_FORMATS: Array<{ id: ExportFormat; label: string }> = [
+/** Every SQL export: the `@dbml/core` exporters (worker) and relvista's own Snowflake generator. */
+export type SqlExportFormat = ExportFormat | 'snowflake';
+
+export const EXPORT_FORMATS: Array<{ id: SqlExportFormat; label: string }> = [
   { id: 'postgres', label: 'PostgreSQL' },
   { id: 'mysql', label: 'MySQL' },
   { id: 'mssql', label: 'SQL Server' },
   { id: 'oracle', label: 'Oracle' },
+  { id: 'snowflake', label: 'Snowflake' },
 ];
 
 export const IMPORT_FORMATS: Array<{ id: ImportFormat; label: string }> = [

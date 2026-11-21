@@ -35,10 +35,21 @@ function thirdParty(options: { main: boolean }): Plugin {
   };
 }
 
-// Served at https://uncovered-songs.github.io/relvista/editor/ (copied into the docs build).
+// jsPDF's optional dependencies, loaded only by its `.html()` / `addSvgAsImage()`, which relvista
+// never calls: an empty module stands in, so they are not bundled (design phase3 §2).
+const emptyModule = fileURLToPath(new URL('./src/stubs/empty.ts', import.meta.url));
+const JSPDF_OPTIONAL = ['html2canvas', 'canvg', 'dompurify'];
+
+// Served at https://relvista.github.io/relvista/editor/ (copied into the docs build).
 export default defineConfig({
   base: process.env.RELVISTA_EDITOR_BASE ?? '/relvista/editor/',
   plugins: [react(), thirdParty({ main: true })],
+  resolve: {
+    alias: JSPDF_OPTIONAL.map((name) => ({
+      find: new RegExp(`^${name}$`),
+      replacement: emptyModule,
+    })),
+  },
   // Licence comments (`/*! … */`, `@license`, `@preserve`) survive minification, at the end of
   // each chunk; full texts are in THIRD_PARTY_NOTICES.txt.
   esbuild: { legalComments: 'eof' },

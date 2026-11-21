@@ -34,6 +34,11 @@ export interface Workspace {
   layoutHandle: FileSystemFileHandle | null;
   layoutInvalid: string | null; // parse error of an existing sidecar (never overwrite silently)
   view: string; // '*' or DiagramView name
+  /**
+   * The https URL the document was fetched from (`?url=`, Open from URL), after the GitHub blob →
+   * raw rewrite; null otherwise. Compare… offers a Git ref of the same path (design phase3 §6.11).
+   */
+  remoteUrl?: string | null;
 }
 
 export interface CompileState {
@@ -56,6 +61,8 @@ export interface SessionV1 {
     tab: 'code' | 'diagram';
     activeFile: string;
     viewport?: { x: number; y: number; zoom: number };
+    /** Focus mode (design phase3 §6.8): session UI state, never in the layout. */
+    focus?: { id: string; hops: number } | null;
   };
 }
 

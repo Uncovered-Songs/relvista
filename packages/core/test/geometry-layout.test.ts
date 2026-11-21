@@ -9,7 +9,9 @@ import {
   compileDbml,
   layoutDiagram,
   layoutDiagramSync,
+  measureNote,
   selectView,
+  wrapNoteText,
   type Box,
   type CompileInput,
   type DiagramGeometry,
@@ -349,5 +351,62 @@ describe('layout options and edge cases', () => {
     const ms = performance.now() - t0;
     expect(ms).toBeLessThan(3000);
     checkGeometry(model, geo, { checkGroupClearance: true });
+  });
+});
+
+describe('sticky note size (saved w/h)', () => {
+  const content =
+    'Sticky notes hold free text about the schema: conventions, owners, open questions. ' +
+    'This one is long enough to wrap over several lines at the default width.';
+  const note = { id: 'note:n', name: 'n', content, color: null } as DiagramModel['stickyNotes'][0];
+  const pad = METRICS.notePadding;
+
+  it('w sets the box width and the wrap width', () => {
+    const base = measureNote(note);
+    expect(base.width).toBe(METRICS.noteWidth);
+    const wide = measureNote(note, undefined, { w: 300 });
+    expect(wide.width).toBe(300);
+    const narrowLines = wrapNoteText(content, undefined, METRICS.noteWidth - 2 * pad);
+    const wideLines = wrapNoteText(content, undefined, 300 - 2 * pad);
+    expect(wideLines.length).toBeLessThan(narrowLines.length);
+    expect(wide.height).toBe(
+      Math.max(METRICS.noteMinHeight, 2 * pad + wideLines.length * METRICS.noteLineHeight),
+    );
+    expect(wide.height).toBeLessThan(base.height);
+  });
+
+  it('w clamps to noteMinWidth..noteMaxWidth; h is honoured, at least noteMinHeight', () => {
+    expect(METRICS.noteMinWidth).toBe(120);
+    expect(METRICS.noteMaxWidth).toBe(640);
+    expect(measureNote(note, undefined, { w: 50 }).width).toBe(120);
+    expect(measureNote(note, undefined, { w: 5000 }).width).toBe(640);
+    expect(measureNote(note, undefined, { h: 333 }).height).toBe(333);
+    expect(measureNote(note, undefined, { h: 10 }).height).toBe(METRICS.noteMinHeight);
+    expect(measureNote(note, undefined, { w: 300, h: 40 })).toEqual({
+      width: 300,
+      height: METRICS.noteMinHeight,
+    });
+    // Invalid sizes are ignored.
+    for (const bad of [0, -5, NaN, Infinity])
+      expect(measureNote(note, undefined, { w: bad, h: bad })).toEqual(measureNote(note));
+  });
+
+  it('the layout pipeline passes saved w/h of notes', async () => {
+    const model = example('07-sticky-notes.dbml');
+    const first = model.stickyNotes[0]!;
+    const expected = measureNote(first, undefined, { w: 300 });
+    const saved = { nodes: { [first.id]: { w: 300 } as NodeLayout } };
+    for (const geo of [
+      await layoutDiagram(model, { saved }),
+      layoutDiagramSync(model, { saved }),
+      layoutDiagramSync(model, { saved, engine: 'grid' }),
+    ]) {
+      expect(geo.nodes[first.id]).toMatchObject({ width: 300, height: expected.height });
+      checkGeometry(model, geo, { checkGroupClearance: true });
+    }
+    const clamped = layoutDiagramSync(model, {
+      saved: { nodes: { [first.id]: { w: 10, h: 900 } as NodeLayout } },
+    });
+    expect(clamped.nodes[first.id]).toMatchObject({ width: METRICS.noteMinWidth, height: 900 });
   });
 });

@@ -18,8 +18,22 @@ import {
   type Placement,
 } from './layout-graph.js';
 import { BLOCK_GAP, TARGET_ASPECT, packBlocks, orderBlocks, toBlock } from './layout-pack.js';
-import { dagrePlacement, gridEnginePlacement, type Direction } from './layout-dagre.js';
+import {
+  dagreComponent,
+  dagrePlacement,
+  gridEnginePlacement,
+  type Direction,
+} from './layout-dagre.js';
 import { elkComponent } from './elk.js';
+import { collapsedGroupIds } from './collapse.js';
+
+/**
+ * `engine: 'auto'` lays out a connected component of free nodes with dagre when it has at most
+ * this many nodes and no TableGroup with members in it, else with ELK. Chosen from the
+ * measurement in `test/engine-auto.bench.ts` (decision 0003): up to 3 nodes dagre matches ELK on
+ * crossings, area and refs under tables in >= 95 % of components.
+ */
+export const AUTO_DAGRE_MAX_NODES = 3;
 
 /** Options of `layoutDiagram`: the contract's `LayoutOptions` plus ELK worker support. */
 export interface AutoLayoutOptions extends LayoutOptions {
@@ -39,6 +53,8 @@ interface Prepared {
   direction: Direction;
   /** Target width / height of the whole picture. */
   aspect: number;
+  /** Group ids in model order (the order of `geometry.groups`). */
+  groupOrder: string[];
 }
 
 function prepare(model: DiagramModel, options: LayoutOptions): Prepared {
@@ -47,6 +63,7 @@ function prepare(model: DiagramModel, options: LayoutOptions): Prepared {
     detailLevel: options.detailLevel ?? 'all',
     measure: options.measure ?? estimateTextWidth,
     saved,
+    collapsed: collapsedGroupIds(model, options.saved),
   });
   const fixed = new Map<string, { x: number; y: number }>();
   for (const n of graph.nodes) {
@@ -64,6 +81,7 @@ function prepare(model: DiagramModel, options: LayoutOptions): Prepared {
       options.aspectRatio > 0
         ? Math.min(4, Math.max(0.25, options.aspectRatio))
         : TARGET_ASPECT,
+    groupOrder: model.groups.map((g) => g.id),
   };
 }
 
@@ -104,9 +122,17 @@ function finalize(p: Prepared, placement: Placement): DiagramGeometry {
   }
 
   const nodes: Record<string, NodeGeometry> = {};
+  const collapsed = new Map<string, GroupGeometry>();
   const boxes: Box[] = [];
   for (const n of graph.nodes) {
     const pos = fixed.get(n.id) ?? placement.positions.get(n.id) ?? { x: 0, y: 0 };
+    if (n.collapsedGroup) {
+      // The box is the collapsed group itself: it goes into `groups`, never into `nodes`.
+      const box = { x: pos.x, y: pos.y, width: n.width, height: n.height };
+      collapsed.set(n.id, { id: n.id, ...box, collapsed: true });
+      boxes.push(box);
+      continue;
+    }
     const node: NodeGeometry = {
       id: n.id,
       kind: n.kind,
@@ -120,7 +146,15 @@ function finalize(p: Prepared, placement: Placement): DiagramGeometry {
     boxes.push(node);
   }
   const groups: Record<string, GroupGeometry> = {};
-  for (const g of graph.groups) {
+  const expanded = new Map(graph.groups.map((g) => [g.id, g]));
+  for (const id of p.groupOrder) {
+    const c = collapsed.get(id);
+    if (c) {
+      groups[id] = c;
+      continue;
+    }
+    const g = expanded.get(id);
+    if (!g || groups[id]) continue;
     const box = groupBox(g.members.map((m) => nodes[m]!));
     groups[g.id] = { id: g.id, ...box };
     boxes.push(box);
@@ -153,9 +187,30 @@ function syncPlacement(p: Prepared, engine: LayoutOptions['engine']): Placement 
     : dagrePlacement(p.free, p.direction, p.aspect);
 }
 
+/** Whether `engine: 'auto'` gives this connected component to ELK (else dagre). */
+function autoPicksElk(comp: LayoutGraph): boolean {
+  return comp.groups.length > 0 || comp.nodes.length > AUTO_DAGRE_MAX_NODES;
+}
+
+/** Whether laying out this component with ELK actually runs (and loads) ELK. */
+function elkRuns(comp: LayoutGraph): boolean {
+  return comp.edges.length > 0;
+}
+
+/**
+ * Whether `layoutDiagram(model, { ...options, engine: 'auto' })` would load ELK at all: true when
+ * some connected component of the free (unsaved) nodes has refs and either more than
+ * `AUTO_DAGRE_MAX_NODES` nodes or a TableGroup with members in it. The canvas calls it to skip the
+ * async ELK pass (and the worker download) entirely. `options.engine` is ignored.
+ */
+export function needsElk(model: DiagramModel, options: LayoutOptions = {}): boolean {
+  const p = prepare(model, options);
+  return components(p.free).some((c) => elkRuns(c) && autoPicksElk(c));
+}
+
 /**
  * Synchronous auto-layout with dagre (default) or the grid engine (`engine: 'grid'`). `engine:
- * 'elk'` is treated as dagre here. No edge routes are produced; renderers route refs themselves.
+ * 'elk'` and `'auto'` are treated as dagre here. No edge routes are produced; renderers route refs themselves.
  */
 export function layoutDiagramSync(
   model: DiagramModel,
@@ -168,7 +223,23 @@ export function layoutDiagramSync(
 /**
  * Auto-layout with ELK (default) — layered, ports on the referenced column rows, orthogonal ref
  * routes in `geometry.edges`, TableGroups as compound nodes. `engine: 'dagre' | 'grid'` runs the
- * synchronous engines. Deterministic: the same input always gives the same geometry.
+ * synchronous engines. `engine: 'auto'` decides per connected component of free nodes: dagre (no
+ * routes) for components of at most `AUTO_DAGRE_MAX_NODES` nodes without groups, ELK for the
+ * others; elkjs is not loaded when no component needs it (`needsElk`). Deterministic: the same
+ * input always gives the same geometry.
+ *
+ * @example
+ * ```ts
+ * import { compileDbml, layoutDiagram, layoutDiagramSync } from '@relvista/core';
+ *
+ * const { model } = compileDbml(source);
+ * if (model) {
+ *   const geometry = await layoutDiagram(model, { engine: 'auto', direction: 'RIGHT' });
+ *   geometry.nodes['public.users']; // { x, y, width, height, ... }
+ *   // Synchronous first picture (dagre), e.g. before the ELK result arrives:
+ *   const quick = layoutDiagramSync(model);
+ * }
+ * ```
  */
 export async function layoutDiagram(
   model: DiagramModel,
@@ -178,10 +249,15 @@ export async function layoutDiagram(
   if (options.engine === 'dagre' || options.engine === 'grid')
     return finalize(p, syncPlacement(p, options.engine));
   const workerUrl = options.workerUrl === undefined ? undefined : String(options.workerUrl);
+  const auto = options.engine === 'auto';
   const blocks = [];
-  // One ELK run per connected component, sequentially (results are packed by our own packer).
+  // One engine run per connected component, sequentially (results are packed by our own packer).
   for (const comp of components(p.free)) {
-    blocks.push(toBlock(comp, await elkComponent(comp, p.direction, workerUrl)));
+    const placement =
+      auto && !autoPicksElk(comp)
+        ? dagreComponent(comp, p.direction)
+        : await elkComponent(comp, p.direction, workerUrl);
+    blocks.push(toBlock(comp, placement));
   }
   return finalize(p, packBlocks(orderBlocks(blocks), BLOCK_GAP, p.aspect));
 }

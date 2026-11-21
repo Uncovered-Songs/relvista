@@ -3,7 +3,7 @@
 `layout.schema.json` defines the **relvista** layout sidecar: a JSON file stored next to a DBML file
 and named after it (`schema.dbml` → `schema.dbml.layout.json`).
 
-- `$id`: `https://uncovered-songs.github.io/relvista/schemas/layout-1.json` (see
+- `$id`: `https://relvista.github.io/relvista/schemas/layout-1.json` (see
   [decision 0002](../docs/decisions/0002-schema-url.md))
 - JSON Schema draft 2020-12
 - Current format version: `1`
@@ -23,7 +23,7 @@ the diagram is then auto-laid out again.
 
 ```json
 {
-  "$schema": "https://uncovered-songs.github.io/relvista/schemas/layout-1.json",
+  "$schema": "https://relvista.github.io/relvista/schemas/layout-1.json",
   "version": 1,
   "views": {
     "*": {

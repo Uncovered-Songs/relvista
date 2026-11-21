@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "views": {
+    "*": {
+      "nodes": {
+        "public.orders": { "x": 0, "y": 0 },
+        "public.customers": { "x": 400, "y": 40 }
+      }
+    }
+  }
+}

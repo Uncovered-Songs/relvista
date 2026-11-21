@@ -1,9 +1,12 @@
 /** Types for the relvista layout sidecar file (schema.dbml.layout.json), matching schemas/layout.schema.json. */
 
-export const LAYOUT_SCHEMA_ID = 'https://uncovered-songs.github.io/relvista/schemas/layout-1.json';
+/** The `$id` of the layout-1 JSON Schema, written as `$schema` into layout files. */
+export const LAYOUT_SCHEMA_ID = 'https://relvista.github.io/relvista/schemas/layout-1.json';
+/** The layout file format version this package reads and writes. */
 export const LAYOUT_VERSION = 1;
 /** View key for the default view. Named views inherit node placements from it. */
 export const DEFAULT_VIEW = '*';
+/** Schema name assumed for tables and enums written without one. */
 export const DEFAULT_SCHEMA = 'public';
 
 /**
@@ -14,11 +17,13 @@ export type NodeId = string;
 /** Edge id as produced by the diagram model. */
 export type RefId = string;
 
+/** A point in diagram units. */
 export interface Point {
   x: number;
   y: number;
 }
 
+/** The saved position (and optional size, pin and collapse state) of one table, note or group. */
 export interface NodeLayout {
   x: number;
   y: number;
@@ -31,14 +36,17 @@ export interface NodeLayout {
   pinned?: boolean;
 }
 
+/** Pan and zoom of a view: the diagram point at the top-left corner, and the zoom factor. */
 export interface Viewport {
   x: number;
   y: number;
   zoom: number;
 }
 
+/** A side of a table box. */
 export type Side = 'top' | 'right' | 'bottom' | 'left';
 
+/** Saved routing hints of one ref: waypoints and the sides its ends attach to. */
 export interface EdgeLayout {
   waypoints?: Point[];
   sourceSide?: Side;
@@ -63,14 +71,17 @@ export interface ViewLayout extends ViewLayoutOverride {
 /** Views by name: the default view ("*") holds full positions, named views hold overrides. */
 export type LayoutViews = Record<string, ViewLayoutOverride> & { [DEFAULT_VIEW]?: ViewLayout };
 
+/** How much of each table is drawn: every column, keys only, or the table name only. */
 export type DetailLevel = 'all' | 'keys' | 'names';
 
+/** Display preferences a layout file may carry for the tools that open it. */
 export interface ThemeHints {
   colorScheme?: 'light' | 'dark' | 'auto';
   showGrid?: boolean;
   edgeStyle?: 'orthogonal' | 'curved' | 'straight';
 }
 
+/** Display settings shared by every view of a layout file. */
 export interface LayoutSettings {
   detailLevel?: DetailLevel;
   theme?: ThemeHints;
@@ -78,6 +89,7 @@ export interface LayoutSettings {
   [extension: `x-${string}`]: unknown;
 }
 
+/** A layout file (`schema.dbml.layout.json`, format layout-1): everything DBML cannot store. */
 export interface Layout {
   $schema?: string;
   version: 1;
@@ -87,10 +99,12 @@ export interface Layout {
   [extension: `x-${string}`]: unknown;
 }
 
+/** One problem found by `parseLayout`. */
 export interface LayoutError {
   /** JSON Pointer to the offending value ("" for the root). */
   path: string;
   message: string;
 }
 
+/** What `parseLayout` returns: the validated layout, or the errors found. */
 export type ParseLayoutResult = { ok: true; layout: Layout } | { ok: false; errors: LayoutError[] };

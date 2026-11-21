@@ -58,6 +58,28 @@ const PROJECT_RESERVED_KEYS = new Set([
 /**
  * Parses DBML (one string, or several files linked with `use` / `reuse`) into a `DiagramModel`.
  * Never throws: every problem, including unexpected parser exceptions, becomes a diagnostic.
+ *
+ * @example
+ * ```ts
+ * import { compileDbml } from '@relvista/core';
+ *
+ * const { model, diagnostics } = compileDbml(`
+ * Table users {
+ *   id int [pk]
+ * }
+ * Table orders {
+ *   id int [pk]
+ *   user_id int [ref: > users.id]
+ * }`);
+ * model?.tables.map((t) => t.id); // ['public.users', 'public.orders']
+ * diagnostics; // []
+ *
+ * // A multi-file project (`use` / `reuse`):
+ * compileDbml({
+ *   entry: 'main.dbml',
+ *   files: { 'main.dbml': mainText, 'billing.dbml': billingText },
+ * });
+ * ```
  */
 export function compileDbml(input: CompileInput): CompileResult {
   const sources = new SourceMap();

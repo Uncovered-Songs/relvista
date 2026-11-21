@@ -1,0 +1,56 @@
+{
+  "$schema": "https://typedoc.org/schema.json",
+  "name": "API reference",
+  "entryPointStrategy": "packages",
+  "entryPoints": [
+    "../../packages/core",
+    "../../packages/renderer",
+    "../../packages/docusaurus-plugin"
+  ],
+  "packageOptions": {
+    "entryPoints": ["src/@(index|defaults).ts"],
+    "tsconfig": "tsconfig.json",
+    "readme": "none",
+    "excludePrivate": true,
+    "excludeInternal": true,
+    "excludeExternals": true,
+    "validation": {
+      "notExported": true,
+      "invalidLink": true,
+      "notDocumented": true
+    },
+    "skipErrorChecking": true,
+    "requiredToBeDocumented": [
+      "Enum",
+      "Variable",
+      "Function",
+      "Class",
+      "Interface",
+      "TypeAlias",
+      "Method",
+      "Accessor"
+    ],
+    "compilerOptions": {
+      "baseUrl": ".",
+      "paths": {
+        "@relvista/core": ["../../packages/core/src/index.ts"],
+        "@relvista/renderer": ["../../packages/renderer/src/index.ts"]
+      }
+    },
+    "disableSources": true
+  },
+  "plugin": ["typedoc-plugin-markdown"],
+  "out": "api",
+  "cleanOutputDir": true,
+  "readme": "none",
+  "entryFileName": "index",
+  "outputFileStrategy": "members",
+  "excludeScopesInPaths": true,
+  "hidePageHeader": true,
+  "hideBreadcrumbs": true,
+  "useCodeBlocks": true,
+  "sanitizeComments": true,
+  "excludePrivate": true,
+  "excludeInternal": true,
+  "treatWarningsAsErrors": true
+}

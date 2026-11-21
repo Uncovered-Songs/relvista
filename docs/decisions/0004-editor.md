@@ -67,7 +67,7 @@ Build probe (Vite 7.3.8, base `/relvista/editor/`, Monaco `editor.api` + `featur
   `apps/docs/build/editor/` after `docusaurus build`; `relvista-docs` lists `relvista-editor` as a
   `workspace:*` devDependency so `pnpm docs:build` (`--filter relvista-docs...`) builds the editor
   first. `deploy-docs.yml` keeps uploading one artifact, `apps/docs/build`, unchanged.
-- The editor shares the origin `uncovered-songs.github.io` with the docs, so it reads and writes
+- The editor shares the origin `relvista.github.io` with the docs, so it reads and writes
   Docusaurus's `localStorage.theme` key: one theme choice for both.
 
 ### Share format: compressed URL hash

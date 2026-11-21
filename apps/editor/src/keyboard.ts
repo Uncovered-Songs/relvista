@@ -15,7 +15,9 @@ export type ShortcutAction =
   | 'zoomOut'
   | 'focusCode'
   | 'focusDiagram'
-  | 'help';
+  | 'help'
+  | 'search'
+  | 'compare';
 
 export type FocusZone = 'monaco' | 'diagram' | 'input' | 'other';
 
@@ -45,10 +47,13 @@ export function hasMod(e: KeyLike, mac: boolean): boolean {
   return mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
 }
 
+/**
+ * Where focus is. A text field counts as 'input' even inside the diagram (the sticky-note editor,
+ * a filter field), so single-key diagram shortcuts never fire while typing.
+ */
 export function zoneOf(el: Element | null): FocusZone {
   if (!el) return 'other';
   if (el.closest('.monaco-editor')) return 'monaco';
-  if (el.closest('.rv-canvas')) return 'diagram';
   const tag = el.tagName;
   if (
     tag === 'INPUT' ||
@@ -58,6 +63,7 @@ export function zoneOf(el: Element | null): FocusZone {
   ) {
     return 'input';
   }
+  if (el.closest('.rv-canvas')) return 'diagram';
   return 'other';
 }
 
@@ -81,6 +87,11 @@ export function matchShortcut(e: KeyLike, zone: FocusZone, mac: boolean): Shortc
     }
   }
   if (mod && e.altKey && !e.shiftKey && e.code === 'KeyL') return 'autoLayout';
+  // Compare… everywhere (Alt changes `key` on macOS: ⌥D is '∂', so the physical key decides).
+  if (mod && e.altKey && !e.shiftKey && e.code === 'KeyD') return 'compare';
+  // Search: Mod+K anywhere but Monaco (Monaco's own Mod+K chords stay its own).
+  if (mod && !e.altKey && !e.shiftKey && (e.code === 'KeyK' || key === 'k'))
+    return zone === 'monaco' ? null : 'search';
   if (e.altKey && !e.metaKey && !e.ctrlKey && !e.shiftKey) {
     if (e.code === 'Digit1') return 'focusCode';
     if (e.code === 'Digit2') return 'focusDiagram';
@@ -90,8 +101,38 @@ export function matchShortcut(e: KeyLike, zone: FocusZone, mac: boolean): Shortc
     if (e.shiftKey && (e.code === 'Digit1' || key === '!')) return 'fit';
     if (key === '+' || key === '=') return 'zoomIn';
     if (key === '-' || key === '_') return 'zoomOut';
+    if (key === '/') return 'search';
   }
   if (key === '?' && zone !== 'monaco' && zone !== 'input') return 'help';
+  return null;
+}
+
+/** Single-key actions of the diagram (design phase3 §6.13), handled by the diagram pane. */
+export type DiagramKeyAction =
+  | 'newNote'
+  | 'editNote'
+  | 'deleteSelection'
+  | 'detailNames'
+  | 'detailKeys'
+  | 'detailAll'
+  | 'escape';
+
+/**
+ * The diagram action for a key, or null. Only with the diagram focused and no modifier (Shift is
+ * allowed for nothing here): never inside Monaco, a text field, a menu or a dialog. 'editNote'
+ * applies when a sticky note is focused or selected (the pane checks; Enter on a table keeps
+ * revealing it in code).
+ */
+export function matchDiagramKey(e: KeyLike, zone: FocusZone): DiagramKeyAction | null {
+  if (zone !== 'diagram') return null;
+  if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return null;
+  if (e.code === 'KeyN' || e.key === 'n' || e.key === 'N') return 'newNote';
+  if (e.key === 'Enter' || e.key === 'F2') return 'editNote';
+  if (e.key === 'Delete' || e.key === 'Backspace') return 'deleteSelection';
+  if (e.code === 'Digit1' || e.key === '1') return 'detailNames';
+  if (e.code === 'Digit2' || e.key === '2') return 'detailKeys';
+  if (e.code === 'Digit3' || e.key === '3') return 'detailAll';
+  if (e.key === 'Escape') return 'escape';
   return null;
 }
 
@@ -117,10 +158,34 @@ export function shortcutRows(mac: boolean): ShortcutRow[] {
       where: 'Everywhere',
     },
     { keys: j(mod, alt, 'L'), action: 'Auto-layout (keeps pinned)', where: 'Everywhere' },
+    {
+      keys: `${j(mod, 'K')} / /`,
+      action: 'Search tables, columns, views (and paths)',
+      where: 'Outside the code editor (/ on the diagram)',
+    },
+    { keys: j(mod, alt, 'D'), action: 'Compare with another version…', where: 'Everywhere' },
     { keys: j(shift, '1'), action: 'Fit diagram', where: 'Diagram' },
+    { keys: '1 / 2 / 3', action: 'Detail: names / keys / all columns', where: 'Diagram' },
     { keys: '+ / −', action: 'Zoom in / out', where: 'Diagram' },
     { keys: `Arrows (${shift}: fine)`, action: 'Move selected tables', where: 'Diagram' },
     { keys: 'Enter', action: 'Reveal focused table in code', where: 'Diagram' },
+    { keys: 'N', action: 'New sticky note (at the pointer)', where: 'Diagram' },
+    { keys: 'Enter / F2', action: 'Edit the selected sticky note', where: 'Diagram' },
+    {
+      keys: `${j(mod, 'Enter')} / Esc`,
+      action: 'Finish / cancel editing a sticky note',
+      where: 'Note editor',
+    },
+    {
+      keys: 'Delete / Backspace',
+      action: `Delete selected sticky notes (${j(mod, 'Z')} on the diagram restores the layout, in the code the text)`,
+      where: 'Diagram',
+    },
+    {
+      keys: 'Esc',
+      action: 'Close search, then clear the highlight, exit focus, exit compare',
+      where: 'Diagram',
+    },
     {
       keys: `${j(alt, '1')} / ${j(alt, '2')}`,
       action: 'Focus code / diagram',

@@ -51,11 +51,19 @@ function sample(): Layout {
 
 describe('schema', () => {
   it('has the published $id and draft 2020-12', () => {
-    expect(layoutSchema.$id).toBe(
-      'https://uncovered-songs.github.io/relvista/schemas/layout-1.json',
-    );
+    expect(layoutSchema.$id).toBe('https://relvista.github.io/relvista/schemas/layout-1.json');
     expect(layoutSchema.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
     expect(LAYOUT_SCHEMA_ID).toBe(layoutSchema.$id);
+  });
+
+  it('keeps accepting files written with the pre-move id, byte for byte (decision 0002)', () => {
+    const text =
+      '{\n  "$schema": "https://uncovered-songs.github.io/relvista/schemas/layout-1.json",\n' +
+      '  "version": 1,\n  "views": {\n    "*": {\n      "nodes": {}\n    }\n  }\n}\n';
+    const r = parseLayout(JSON.parse(text));
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(serializeLayout(r.layout)).toBe(text);
   });
 });
 

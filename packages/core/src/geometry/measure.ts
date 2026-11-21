@@ -12,6 +12,7 @@ export function columnTypeLabel(column: Column): string {
   return `${column.type}(${column.typeArgs})`;
 }
 
+/** A badge drawn on a column row (note dot, unique, not null). */
 export interface ColumnBadge {
   kind: 'note' | 'unique' | 'notNull';
   /** Pill text ('' for the note dot). */
@@ -49,10 +50,12 @@ export function visibleColumns(table: Table, detailLevel: DetailLevel = 'all'): 
   return table.columns;
 }
 
+/** The name a table is drawn with: `name`, or `schema.name` outside the `public` schema. */
 export function tableTitle(table: Table): string {
   return table.schema === 'public' ? table.name : `${table.schema}.${table.name}`;
 }
 
+/** The size of a table box at a detail level, from its title, columns and badges. */
 export function measureTable(
   table: Table,
   detailLevel: DetailLevel = 'all',
@@ -132,14 +135,29 @@ function breakWord(word: string, measure: TextMeasure, maxWidth: number): string
   return out;
 }
 
+function finitePositive(v: number | undefined): v is number {
+  return typeof v === 'number' && Number.isFinite(v) && v > 0;
+}
+
+/**
+ * Size of a sticky note. `size.w` (a saved width) sets the box width, clamped to
+ * `METRICS.noteMinWidth .. noteMaxWidth`, and the text wraps at `w - 2 × notePadding`; `size.h`
+ * is the box height as is (at least `METRICS.noteMinHeight`), otherwise the height the wrapped
+ * text needs. Without `size` the note is `METRICS.noteWidth` wide.
+ */
 export function measureNote(
   note: StickyNote,
   measure: TextMeasure = estimateTextWidth,
+  size?: { w?: number; h?: number } | null,
 ): { width: number; height: number } {
-  const lines = wrapNoteText(note.content, measure);
+  const width = finitePositive(size?.w)
+    ? Math.min(METRICS.noteMaxWidth, Math.max(METRICS.noteMinWidth, size.w))
+    : METRICS.noteWidth;
+  if (finitePositive(size?.h)) return { width, height: Math.max(METRICS.noteMinHeight, size.h) };
+  const lines = wrapNoteText(note.content, measure, width - METRICS.notePadding * 2);
   const height = Math.max(
     METRICS.noteMinHeight,
     METRICS.notePadding * 2 + lines.length * METRICS.noteLineHeight,
   );
-  return { width: METRICS.noteWidth, height };
+  return { width, height };
 }
