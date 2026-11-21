@@ -23,7 +23,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['github']] : 'list',
   use: {
-    baseURL: `http://127.0.0.1:${port}/relvista/`,
+    baseURL: `http://127.0.0.1:${port}/`,
     viewport: { width: 1360, height: 900 },
     deviceScaleFactor: 1,
     trace: 'retain-on-failure',
@@ -37,7 +37,7 @@ export default defineConfig({
   webServer: {
     // Serves the production build (run `pnpm docs:build` first).
     command: `pnpm exec docusaurus serve --no-open --host 127.0.0.1 --port ${port}`,
-    url: `http://127.0.0.1:${port}/relvista/`,
+    url: `http://127.0.0.1:${port}/`,
     reuseExistingServer: false,
     timeout: 60_000,
     stdout: 'ignore',

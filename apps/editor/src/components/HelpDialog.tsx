@@ -1,11 +1,14 @@
 import { useState, type ReactElement } from 'react';
-import { version } from '../../package.json';
 import { detectMac, shortcutRows } from '../keyboard.js';
 import { store } from '../state/store.js';
+import { editorVersionLabel } from '../version.js';
+import { Lockup } from './icons.js';
 import { Modal } from './Modal.js';
 
 const DOCS = new URL('../', new URL(import.meta.env.BASE_URL, 'https://x.invalid')).pathname;
-const GITHUB = 'https://github.com/relvista/relvista';
+/** AGPL-3.0 §13: users of the hosted editor get a link to its source code. */
+const SOURCE = 'https://github.com/relvista/relvista/tree/main/apps/editor';
+const LICENSE = 'https://github.com/relvista/relvista/blob/main/apps/editor/LICENSE';
 /** Shipped next to the app by vite.config.ts (THIRD_PARTY_NOTICES.md at the repository root). */
 const NOTICES = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.txt`;
 
@@ -90,19 +93,33 @@ export function HelpDialog(props: { onClose(): void }): ReactElement {
           <a href={`${DOCS}docs/editor`}>Editor guide</a>
         </li>
         <li>
-          <a href={GITHUB} target="_blank" rel="noreferrer">
-            Source code on GitHub
-          </a>{' '}
-          (MIT)
-        </li>
-        <li>
           <a href={`${DOCS}third-party-notices`}>Licences</a> of the open-source packages in this
           editor (<a href={NOTICES}>plain text</a>)
         </li>
       </ul>
+      <h3 className="ed-help__h">Source code and licence</h3>
+      <p>
+        This editor is free software under the{' '}
+        <a href={LICENSE} target="_blank" rel="noreferrer">
+          GNU Affero General Public License, version 3 or later
+        </a>{' '}
+        (AGPL-3.0-or-later). If you run a changed copy for other people, you must offer them its
+        source code too.
+      </p>
+      <p>
+        <a href={SOURCE} target="_blank" rel="noreferrer">
+          Source code
+        </a>{' '}
+        of this editor on GitHub. The relvista libraries (<code>@relvista/core</code>,{' '}
+        <code>@relvista/renderer</code>, <code>@relvista/docusaurus-plugin</code>) are MIT.
+      </p>
+      <div className="ed-help__brand">
+        <Lockup height={20} />
+        <span className="ed-muted">{editorVersionLabel()}</span>
+      </div>
       <p className="ed-muted ed-small">
-        <strong>relvista</strong> editor {version}. relvista is an independent open-source project,
-        not affiliated with Holistics or dbdiagram.io. DBML is an open-source language by Holistics.
+        relvista is an independent open-source project, not affiliated with Holistics or
+        dbdiagram.io. DBML is an open-source language by Holistics.
       </p>
     </Modal>
   );

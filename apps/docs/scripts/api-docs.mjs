@@ -113,6 +113,9 @@ function decorate() {
         front.push(`slug: ${JSON.stringify(slug.replace(/\.md$/, ''))}`);
       }
     }
+    // The reference's front page: first in its sidebar, with no "Previous" link.
+    if (file === join(outDir, 'index.md'))
+      front.push('sidebar_position: 0', 'pagination_prev: null');
     if (front.length === 0) continue;
     const text = readFileSync(file, 'utf8');
     writeFileSync(file, `---\n${front.join('\n')}\n---\n\n${text}`);

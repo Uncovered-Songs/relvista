@@ -51,3 +51,30 @@ now answers 404 for every path, and the site lives at `https://relvista.github.i
   `apps/docs/e2e/site-urls.spec.ts` fails if a shipped file (package `dist`, `package.json`,
   `README.md`, layout schema, or anything in the built docs site and editor) still contains
   `uncovered-songs.github.io`.
+
+## Amendment 2026-11-21 — custom domain `relvista.org`
+
+The owner registered `relvista.org` and pointed it at GitHub Pages (A/AAAA records, `www` CNAME,
+domain verified for the `relvista` organisation). The site moves to `https://relvista.org/`, with
+the editor at `https://relvista.org/editor/`.
+
+- The `$id` (and `LAYOUT_SCHEMA_ID`) is now `https://relvista.org/schemas/layout-1.json`. The docs
+  build publishes `schemas/layout.schema.json` at exactly that path
+  (`apps/docs/scripts/sync-assets.mjs` copies it to `static/schemas/layout-1.json`).
+- relvista accepts three ids. `@relvista/core` never checks `$schema` (the schema types it as any
+  string) and never rewrites it, so a file that names any of these parses and saves byte-identical
+  unless edited:
+  - `https://relvista.org/schemas/layout-1.json` (current, written into new files)
+  - `https://relvista.github.io/relvista/schemas/layout-1.json` (first amendment)
+  - `https://uncovered-songs.github.io/relvista/schemas/layout-1.json` (original decision)
+
+  `packages/core/test/layout.test.ts` round-trips all three.
+
+- With a custom domain set, GitHub Pages redirects `relvista.github.io/relvista/…` to
+  `relvista.org/…`, so the first-amendment id keeps resolving for tools that fetch it.
+- The domain is now under the project's control, so the rule of the original decision holds again
+  from here on: the `$id` does not change when hosting changes.
+- `apps/docs/e2e/shipped-urls.spec.ts` fails if a shipped file (built site and editor, package
+  `dist`/`lib`, `package.json`, `README.md`, layout schema) contains `uncovered-songs.github.io` or
+  `relvista.github.io/relvista`. The two legacy ids above, as exact strings, are the only
+  exception (`LEGACY_SCHEMA_IDS` in that spec).

@@ -1,18 +1,20 @@
 import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import npm2yarn from '@docusaurus/remark-plugin-npm2yarn';
-import { themes as prismThemes } from 'prism-react-renderer';
 import thirdPartyModules from './plugins/third-party-modules';
+import { relvistaDark, relvistaLight } from './src/prismThemes';
 
 const repoUrl = 'https://github.com/relvista/relvista';
+const fontsCss = 'https://fonts.googleapis.com/css2?family=Manrope:wght@600..800&display=swap';
+const imageAlt = 'relvista: DBML entity-relationship diagrams, open source';
 
 const config: Config = {
   title: 'relvista',
   tagline: 'Open-source DBML diagrams for your docs',
-  favicon: 'img/favicon.svg',
+  // The SVG icon is a headTags entry (with its type) rather than `favicon`.
 
-  url: 'https://relvista.github.io',
-  baseUrl: '/relvista/',
+  url: 'https://relvista.org',
+  baseUrl: '/',
   organizationName: 'relvista',
   projectName: 'relvista',
   trailingSlash: false,
@@ -25,6 +27,31 @@ const config: Config = {
 
   i18n: { defaultLocale: 'en', locales: ['en'] },
 
+  // Icons and the manifest (docs/design/brand.md §8).
+  headTags: [
+    {
+      tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/svg+xml', href: '/img/favicon.svg' },
+    },
+    {
+      tagName: 'link',
+      attributes: { rel: 'icon', type: 'image/png', sizes: '32x32', href: '/img/favicon-32.png' },
+    },
+    { tagName: 'link', attributes: { rel: 'apple-touch-icon', href: '/img/apple-touch-icon.png' } },
+    { tagName: 'link', attributes: { rel: 'manifest', href: '/site.webmanifest' } },
+    { tagName: 'link', attributes: { rel: 'preconnect', href: 'https://fonts.googleapis.com' } },
+    {
+      tagName: 'link',
+      attributes: {
+        rel: 'preconnect',
+        href: 'https://fonts.gstatic.com',
+        crossorigin: 'anonymous',
+      },
+    },
+  ],
+  // Manrope for headings only; body text keeps the system stack the diagrams measure with.
+  stylesheets: [fontsCss],
+
   presets: [
     [
       'classic',
@@ -35,10 +62,13 @@ const config: Config = {
           remarkPlugins: [[npm2yarn, { sync: true, converters: ['yarn', 'pnpm'] }]],
         },
         // The 1.0 announcement is `unlisted` until the packages are on npm (docs/releasing.md):
-        // built and reachable by its URL, but not in the blog list, feeds or the sitemap.
+        // built and reachable by its URL, but not in the blog list, feeds or the sitemap. Until a
+        // post is listed there are no feeds (they would be empty) and /blog says "No posts yet."
+        // (src/theme/BlogListPage). On release day delete `feedOptions` together with `unlisted`.
         blog: {
           blogTitle: 'relvista blog',
           blogDescription: 'Releases and news from relvista',
+          feedOptions: { type: null },
           showReadingTime: true,
           editUrl: `${repoUrl}/edit/main/apps/docs/`,
           remarkPlugins: [[npm2yarn, { sync: true, converters: ['yarn', 'pnpm'] }]],
@@ -71,9 +101,25 @@ const config: Config = {
 
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
+    image: 'img/social-preview.png',
+    metadata: [
+      { property: 'og:image:alt', content: imageAlt },
+      { property: 'og:image:width', content: '1280' },
+      { property: 'og:image:height', content: '640' },
+      { property: 'og:site_name', content: 'relvista' },
+      { property: 'og:type', content: 'website' },
+      { name: 'twitter:image:alt', content: imageAlt },
+      { name: 'theme-color', media: '(prefers-color-scheme: light)', content: '#ffffff' },
+      { name: 'theme-color', media: '(prefers-color-scheme: dark)', content: '#12161c' },
+    ],
     navbar: {
-      title: 'relvista',
-      logo: { alt: 'relvista logo', src: 'img/logo.svg' },
+      // The lockup carries the name, so there is no navbar title.
+      logo: {
+        alt: 'relvista',
+        src: 'img/logo-light.svg',
+        srcDark: 'img/logo-dark.svg',
+        height: 28,
+      },
       items: [
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
         { to: '/docs/gallery', label: 'Gallery', position: 'left' },
@@ -96,6 +142,8 @@ const config: Config = {
     },
     footer: {
       style: 'dark',
+      // The footer is navy in both modes (custom.css), so it always shows the dark lockup.
+      logo: { alt: 'relvista', src: 'img/logo-dark.svg', href: '/', height: 32 },
       links: [
         {
           title: 'Docs',
@@ -119,17 +167,17 @@ const config: Config = {
         },
       ],
       copyright:
-        'relvista is MIT licensed. relvista is an independent open-source project, not affiliated with Holistics or dbdiagram.io. DBML is an open-source language by Holistics.',
+        'The relvista libraries are MIT licensed; the editor is AGPL-3.0-or-later. relvista is an independent open-source project, not affiliated with Holistics or dbdiagram.io. DBML is an open-source language by Holistics.',
     },
     prism: {
-      theme: prismThemes.github,
-      darkTheme: prismThemes.dracula,
+      theme: relvistaLight,
+      darkTheme: relvistaDark,
       additionalLanguages: ['json', 'bash'],
     },
     dbml: {
       height: 480,
       // Local builds link to their own copy of the editor (the plugin default is the hosted one).
-      editorUrl: '/relvista/editor/',
+      editorUrl: '/editor/',
     },
   } satisfies Preset.ThemeConfig,
 };

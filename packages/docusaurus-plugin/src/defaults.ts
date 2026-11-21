@@ -68,7 +68,7 @@ export interface ThemeConfig {
  * The hosted editor. Same value as `DEFAULT_EDITOR_URL` in `@relvista/renderer` (a test keeps them
  * equal); repeated here so config validation in Node never loads the renderer.
  */
-export const DEFAULT_EDITOR_URL = 'https://relvista.github.io/relvista/editor/';
+export const DEFAULT_EDITOR_URL = 'https://relvista.org/editor/';
 
 /**
  * Every toolbar item, in the renderer's default order (`DEFAULT_TOOLBAR`, docs/design/phase3-v1.md

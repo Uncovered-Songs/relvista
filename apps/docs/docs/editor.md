@@ -57,11 +57,11 @@ server that allows cross-origin requests (CORS); GitHub `blob` links are rewritt
 file. Only the `.dbml` file is requested unless you ask for its layout too, because probing for a
 layout file that does not exist shows up as a 404 error in the browser console:
 
-| Link                                                | Layout                                                    |
-| --------------------------------------------------- | --------------------------------------------------------- |
-| `/relvista/editor/?url=<file>`                      | none: tables are placed automatically                     |
-| `/relvista/editor/?url=<file>&layout`               | `<file>.layout.json` next to it, if there is one          |
-| `/relvista/editor/?url=<file>&layout=<layout file>` | that file (a full URL, or a path relative to the `.dbml`) |
+| Link                                       | Layout                                                    |
+| ------------------------------------------ | --------------------------------------------------------- |
+| `/editor/?url=<file>`                      | none: tables are placed automatically                     |
+| `/editor/?url=<file>&layout`               | `<file>.layout.json` next to it, if there is one          |
+| `/editor/?url=<file>&layout=<layout file>` | that file (a full URL, or a path relative to the `.dbml`) |
 
 In the dialog, **Also load its layout file** does the same as `&layout`. Encode the file URL
 (`encodeURIComponent`) when it has its own query string.
@@ -149,7 +149,7 @@ the docs: see [Exploring diagrams](./exploring.mdx).
 The editor's address carries what you are looking at: `#view=billing&table=invoices&vp=…`. It is
 kept up to date as you work (without history entries) and applied again on reload, so you can
 bookmark a place in a schema. A link can combine it with `?url=` to open a file and go straight to
-a table: `/relvista/editor/?url=<file>#table=orders&hops=1`. The keys are the ones of
+a table: `/editor/?url=<file>#table=orders&hops=1`. The keys are the ones of
 [docs deep links](./exploring.mdx#deep-links). The **Share** dialog's **Include position** adds the
 current table and position to a share link.
 

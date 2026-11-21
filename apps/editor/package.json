@@ -2,8 +2,8 @@
   "name": "relvista-editor",
   "version": "0.0.0",
   "private": true,
-  "description": "relvista editor website: DBML code editor with a live ER diagram (deployed at /relvista/editor/)",
-  "license": "MIT",
+  "description": "relvista editor website: DBML code editor with a live ER diagram (deployed at /editor/)",
+  "license": "AGPL-3.0-or-later",
   "type": "module",
   "scripts": {
     "dev": "vite",

@@ -11,15 +11,18 @@ stores everything else in a sidecar JSON file named after it: `schema.dbml` →
 automatically again.
 
 The format is defined by a JSON Schema published at
-[`https://relvista.github.io/relvista/schemas/layout-1.json`](pathname:///schemas/layout-1.json)
+[`https://relvista.org/schemas/layout-1.json`](pathname:///schemas/layout-1.json)
 (draft 2020-12). Point `$schema` at it and editors such as VS Code give you completion and
 validation while you edit.
+
+Files written before 1.0 may name an older `$schema` id. They still load, and **relvista** saves
+them with `$schema` unchanged. New files get the current id.
 
 ## Example
 
 ```json title="schema.dbml.layout.json"
 {
-  "$schema": "https://relvista.github.io/relvista/schemas/layout-1.json",
+  "$schema": "https://relvista.org/schemas/layout-1.json",
   "version": 1,
   "views": {
     "*": {

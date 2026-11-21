@@ -2,7 +2,7 @@
 
 The editor website: Monaco DBML editing with a live, editable ER diagram, file-based saving
 (File System Access API with a download fallback), share links and exports. Static Vite SPA,
-deployed at <https://relvista.github.io/relvista/editor/> inside the docs Pages artifact.
+deployed at <https://relvista.org/editor/> inside the docs Pages artifact.
 
 Design and contracts: [`docs/design/phase2-editor.md`](../../docs/design/phase2-editor.md),
 decision [0004](../../docs/decisions/0004-editor.md).
@@ -12,7 +12,7 @@ decision [0004](../../docs/decisions/0004-editor.md).
 From the repository root:
 
 ```sh
-pnpm editor:dev           # builds core + renderer, then http://localhost:5173/relvista/editor/
+pnpm editor:dev           # builds core + renderer, then http://localhost:5173/editor/
 pnpm editor:build         # core + renderer + editor (typecheck + dist/)
 pnpm docs:build           # the Pages site: docs, with the editor copied into apps/docs/build/editor/
 pnpm test:e2e:editor      # Playwright against that site (run docs:build first)
@@ -20,14 +20,14 @@ pnpm test:e2e:editor      # Playwright against that site (run docs:build first)
 
 Inside `apps/editor`: `pnpm test` (unit tests, vitest), `pnpm typecheck`, `pnpm build`.
 
-`RELVISTA_EDITOR_BASE=/` serves the app at the root instead of `/relvista/editor/`.
+`RELVISTA_EDITOR_BASE=/` serves the app at the root instead of `/editor/`.
 
 ## Deployment
 
 The editor has no deployment of its own. `apps/docs` lists it as a dev dependency, so
 `pnpm docs:build` builds it first; the docs build then runs `scripts/copy-editor.mjs`, which copies
 `dist/` (without source maps) to `apps/docs/build/editor/`. `.github/workflows/deploy-docs.yml`
-uploads that one folder to GitHub Pages: the docs at `/relvista/`, the editor at `/relvista/editor/`.
+uploads that one folder to GitHub Pages: the docs at `/`, the editor at `/editor/`.
 The docs navbar, the landing page and every docs diagram ("Open in editor") link to it.
 
 ## End-to-end tests
@@ -88,10 +88,17 @@ variants (tabs, trailing whitespace, unicode, …), edge files, long edit-and-un
 relative to the file) loads that file and warns if it cannot. Probing by default would make every
 remote file without a sidecar log a 404 in the console, which no fetch option can hide.
 
-## Licences
+## Licence
+
+The editor is AGPL-3.0-or-later ([LICENSE](LICENSE)); the rest of the repository, including the
+`@relvista/*` libraries it uses, is MIT ([decision 0006](../../docs/decisions/0006-licence-split.md)).
+If you run a changed copy for other people, offer them its source code. Help links to the source
+(`SOURCE` in `src/components/HelpDialog.tsx`); point it at your fork.
+
+## Third-party licences
 
 The build records every npm package it bundles (main bundle and workers) in
 `node_modules/.cache/relvista-third-party/editor.json`; `pnpm notices` turns that and the docs
 site's list into the root `THIRD_PARTY_NOTICES.md`, which the build ships as
-`/relvista/editor/THIRD_PARTY_NOTICES.txt` (linked from Help). Licence comments (`/*!`, `@license`)
+`/editor/THIRD_PARTY_NOTICES.txt` (linked from Help). Licence comments (`/*!`, `@license`)
 are kept at the end of each chunk (`esbuild.legalComments: 'eof'`).

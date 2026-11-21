@@ -10,7 +10,7 @@ const siteDir = fileURLToPath(new URL('..', import.meta.url));
 const repoRoot = fileURLToPath(new URL('../../..', import.meta.url));
 const port = Number(process.env.RELVISTA_E2E_PORT) + 1;
 const origin = `http://127.0.0.1:${port}`;
-const SITE = 'https://relvista.github.io';
+const SITE = 'https://relvista.org';
 
 let server: ChildProcess | null = null;
 
@@ -42,34 +42,33 @@ function readmeUrls(): string[] {
   const urls = new Set<string>();
   for (const f of files) {
     const text = readFileSync(`${repoRoot}${f}`, 'utf8');
-    for (const m of text.matchAll(/https:\/\/relvista\.github\.io(\/relvista\/[^\s)>"'`]*)/g))
-      urls.add(m[1]!);
+    for (const m of text.matchAll(/https:\/\/relvista\.org(\/[^\s)>"'`]*)/g)) urls.add(m[1]!);
   }
   return [...urls];
 }
 
 const NAVBAR = [
-  '/relvista/docs/getting-started',
-  '/relvista/docs/gallery',
-  '/relvista/docs/api',
-  '/relvista/docs/api/',
-  '/relvista/docs/api/core',
-  '/relvista/docs/api/renderer',
-  '/relvista/docs/api/docusaurus-plugin',
-  '/relvista/docs/reference',
-  '/relvista/editor/',
+  '/docs/getting-started',
+  '/docs/gallery',
+  '/docs/api',
+  '/docs/api/',
+  '/docs/api/core',
+  '/docs/api/renderer',
+  '/docs/api/docusaurus-plugin',
+  '/docs/reference',
+  '/editor/',
 ];
 
 test('every navbar and README URL loads directly, with its page', async ({ page }) => {
   const urls = [...new Set([...NAVBAR, ...readmeUrls()])];
-  expect(urls).toContain('/relvista/docs/api/');
+  expect(urls).toContain('/docs/api/');
   for (const path of urls) {
     const res = await page.goto(`${origin}${path}`);
     expect(res?.status(), `${SITE}${path}`).toBe(200);
-    if (path.startsWith('/relvista/docs/'))
+    if (path.startsWith('/docs/'))
       await expect(page.locator('article h1').first(), `${SITE}${path}`).toBeVisible();
   }
   // The API index is the reference page, also after the redirect to the folder URL.
-  await page.goto(`${origin}/relvista/docs/api`);
+  await page.goto(`${origin}/docs/api`);
   await expect(page.locator('article h1').first()).toHaveText(/API reference/);
 });

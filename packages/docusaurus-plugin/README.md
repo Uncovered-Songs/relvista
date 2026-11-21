@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/relvista/relvista/main/brand/icons/icon-192.png" width="48" height="48" alt="">
+
 # @relvista/docusaurus-plugin
 
 Docusaurus plugin from **relvista**: ` ```dbml ` code fences and `.dbml` files become interactive
@@ -10,9 +12,9 @@ React Flow classes. The diagrams fit in: they follow the site's light/dark mode 
 its Infima colours and fonts. It works next to `@docusaurus/theme-mermaid`,
 `@docusaurus/theme-live-codeblock` and your own swizzled `CodeBlock`.
 
-Documentation and live gallery: <https://relvista.github.io/relvista/> ·
-[Getting started](https://relvista.github.io/relvista/docs/getting-started) ·
-[API reference](https://relvista.github.io/relvista/docs/api/)
+Documentation and live gallery: <https://relvista.org/> ·
+[Getting started](https://relvista.org/docs/getting-started) ·
+[API reference](https://relvista.org/docs/api/)
 
 ## Install
 
@@ -141,7 +143,7 @@ zero specificity, so any rule of yours wins:
 | `--rv-font`, `--rv-mono`                                                    | Names and UI text; column types, code |
 
 Each one is described in the docs:
-<https://relvista.github.io/relvista/docs/colours>.
+<https://relvista.org/docs/colours>.
 
 ## Build-time pictures (SSR)
 

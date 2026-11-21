@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/relvista/relvista/main/brand/icons/icon-192.png" width="48" height="48" alt="">
+
 # @relvista/renderer
 
 React components that draw **relvista** DBML diagrams: a pure SVG renderer (SSR-safe), an
@@ -5,8 +7,8 @@ interactive viewer and an editable canvas built on [React Flow](https://reactflo
 to SVG, PNG, PDF and print. The models and layouts come from
 [`@relvista/core`](https://www.npmjs.com/package/@relvista/core).
 
-Documentation: <https://relvista.github.io/relvista/> · API reference:
-<https://relvista.github.io/relvista/docs/api/>
+Documentation: <https://relvista.org/> · API reference:
+<https://relvista.org/docs/api/>
 
 ## Install
 
@@ -77,7 +79,7 @@ which is also published on its own as `@relvista/renderer/xyflow.css`. Colours a
 variables declared with zero specificity, so any rule of yours overrides them; dark mode is
 `data-rv-color-mode="dark"`. Inline fallbacks keep a bare SVG (an exported file) correct without
 the stylesheet. The variables are listed in the
-[colours guide](https://relvista.github.io/relvista/docs/colours).
+[colours guide](https://relvista.org/docs/colours).
 
 ## Credits and licence
 

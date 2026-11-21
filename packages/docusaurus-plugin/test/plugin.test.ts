@@ -81,7 +81,7 @@ describe('validateThemeConfig', () => {
   });
 
   it('accepts editorUrl: false (hides the button) and relative URLs', () => {
-    for (const editorUrl of [false, '/relvista/editor/', 'editor/']) {
+    for (const editorUrl of [false, '/editor/', 'editor/']) {
       const out = validateThemeConfig({ validate, themeConfig: { dbml: { editorUrl } } as never });
       expect(out.dbml.editorUrl).toBe(editorUrl);
     }

@@ -1,7 +1,11 @@
 # Contributing to relvista
 
-Thanks for helping. relvista is MIT-licensed; by contributing you agree your work is released under
-the same licence.
+Thanks for helping. relvista uses two licences: `apps/editor` is AGPL-3.0-or-later
+([apps/editor/LICENSE](apps/editor/LICENSE)), everything else is MIT ([LICENSE](LICENSE)). By
+contributing you agree your work is released under the licence of the directory it changes. A change
+to both gets each directory's licence for its part.
+
+Logo, colours and fonts: [brand/README.md](brand/README.md).
 
 ## Setup
 
@@ -125,6 +129,8 @@ have, so a consumer with `skipLibCheck: false` would get errors from them.
 **LICENSE: committed copies.** npm only packs files inside the package folder, so
 `packages/{core,renderer,docusaurus-plugin}/LICENSE` are committed copies of the root `LICENSE`.
 After changing the root file run `pnpm license:sync`; `packages:check` fails while a copy differs.
+`apps/editor/LICENSE` is different on purpose: the editor is AGPL-3.0-or-later (decision 0006), and
+`packages:check` fails if that file or the editor's `license` field stops saying so.
 
 ## Changesets
 
@@ -135,7 +141,7 @@ entry), and commit the generated file. Docs, tests, CI and the private apps do n
 
 The three packages form a `fixed` group: they always share one version, so a changeset for any of
 them bumps all three. Follow [semver](https://semver.org/) as promised in the
-[API reference](https://relvista.github.io/relvista/docs/reference): a removed or renamed
+[API reference](https://relvista.org/docs/reference): a removed or renamed
 export, an incompatible signature or a `layout-1` change is a `major`; new exports, options and
 props are `minor`; fixes are `patch`.
 

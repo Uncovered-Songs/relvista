@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Serves apps/docs/build (docs + editor) the way GitHub Pages does, for e2e tests:
-//   /relvista/editor   → 301 /relvista/editor/      (folders get a trailing slash)
-//   /relvista/editor/  → editor/index.html
-//   /relvista/docs/x   → docs/x.html                 (Docusaurus with trailingSlash: false)
+//   /editor   → 301 /editor/      (folders get a trailing slash)
+//   /editor/  → editor/index.html
+//   /docs/x   → docs/x.html                 (Docusaurus with trailingSlash: false)
 //   anything else      → 404.html, status 404
 // `docusaurus serve` instead strips the trailing slash from folders, which GitHub Pages never does.
-// Usage: node scripts/serve-site.mjs [--port 3000] [--host 127.0.0.1] [--dir build] [--base /relvista/]
+// Usage: node scripts/serve-site.mjs [--port 3000] [--host 127.0.0.1] [--dir build] [--base /]
 import { createReadStream, existsSync, statSync } from 'node:fs';
 import { createServer } from 'node:http';
 import { extname, join, normalize, resolve, sep } from 'node:path';
@@ -18,7 +18,7 @@ const arg = (name, fallback) => {
 };
 const siteDir = fileURLToPath(new URL('..', import.meta.url));
 const root = resolve(siteDir, arg('dir', 'build'));
-const base = arg('base', '/relvista/');
+const base = arg('base', '/');
 const port = Number(arg('port', '3000'));
 const host = arg('host', '127.0.0.1');
 

@@ -51,18 +51,29 @@ function sample(): Layout {
 
 describe('schema', () => {
   it('has the published $id and draft 2020-12', () => {
-    expect(layoutSchema.$id).toBe('https://relvista.github.io/relvista/schemas/layout-1.json');
+    expect(layoutSchema.$id).toBe('https://relvista.org/schemas/layout-1.json');
     expect(layoutSchema.$schema).toBe('https://json-schema.org/draft/2020-12/schema');
     expect(LAYOUT_SCHEMA_ID).toBe(layoutSchema.$id);
   });
 
-  it('keeps accepting files written with the pre-move id, byte for byte (decision 0002)', () => {
+  it('writes the current id into new layouts', () => {
+    expect(emptyLayout().$schema).toBe('https://relvista.org/schemas/layout-1.json');
+  });
+
+  // Decision 0002: the id moved twice before 1.0. Files that name an older id still parse and
+  // save byte for byte, because relvista never rewrites `$schema`.
+  it.each([
+    'https://relvista.org/schemas/layout-1.json',
+    'https://relvista.github.io/relvista/schemas/layout-1.json',
+    'https://uncovered-songs.github.io/relvista/schemas/layout-1.json',
+  ])('accepts and round-trips $schema %s byte for byte', (id) => {
     const text =
-      '{\n  "$schema": "https://uncovered-songs.github.io/relvista/schemas/layout-1.json",\n' +
+      `{\n  "$schema": "${id}",\n` +
       '  "version": 1,\n  "views": {\n    "*": {\n      "nodes": {}\n    }\n  }\n}\n';
     const r = parseLayout(JSON.parse(text));
     expect(r.ok).toBe(true);
     if (!r.ok) return;
+    expect(r.layout.$schema).toBe(id);
     expect(serializeLayout(r.layout)).toBe(text);
   });
 });

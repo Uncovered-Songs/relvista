@@ -1,5 +1,12 @@
-/* relvista docs: Infima overrides. */
+/* relvista docs: brand tokens (docs/design/brand.md §4) and Infima overrides. */
 :root {
+  --relvista-blue: #2f6fed;
+  --relvista-blue-text: #2560d6;
+  --relvista-teal: #14a38b;
+  --relvista-teal-text: #0f7b6c;
+  --relvista-navy: #0e1a33;
+  --relvista-gradient: linear-gradient(135deg, #2f6fed, #14a38b);
+
   --ifm-color-primary: #2f6fed;
   --ifm-color-primary-dark: #1b5fe8;
   --ifm-color-primary-darker: #175ad9;
@@ -10,28 +17,74 @@
   --ifm-code-font-size: 92%;
   --ifm-font-family-base:
     Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
-  --ifm-heading-font-weight: 650;
+  /* Headings only: diagrams measure text with --ifm-font-family-base, which stays as it is. */
+  --ifm-heading-font-family: Manrope, var(--ifm-font-family-base);
+  --ifm-heading-font-weight: 700;
+  /* #2f6fed is below 4.5:1 on tinted backgrounds (active menu item, breadcrumb chip). */
+  --ifm-link-color: var(--relvista-blue-text);
+  --ifm-menu-color-active: var(--relvista-blue-text);
+  --ifm-breadcrumb-color-active: var(--relvista-blue-text);
   --docusaurus-highlighted-code-line-bg: rgba(47, 111, 237, 0.1);
-  --relvista-accent: #14a38b;
 }
 
-[data-theme='dark'] {
-  --ifm-color-primary: #6f9bff;
-  --ifm-color-primary-dark: #4f84ff;
-  --ifm-color-primary-darker: #3f79ff;
-  --ifm-color-primary-darkest: #0f57ff;
-  --ifm-color-primary-light: #8fb2ff;
-  --ifm-color-primary-lighter: #9fbdff;
-  --ifm-color-primary-lightest: #cfdeff;
+/* `html[...]`: Infima sets its own dark colours with this selector, so a bare `[data-theme]` loses. */
+html[data-theme='dark'] {
+  --relvista-blue: #5b9bff;
+  --relvista-blue-text: #5b9bff;
+  --relvista-teal: #3cc7ae;
+  --relvista-teal-text: #3cc7ae;
+  --ifm-color-primary: #5b9bff;
+  --ifm-color-primary-dark: #3886ff;
+  --ifm-color-primary-darker: #277bff;
+  --ifm-color-primary-darkest: #005ff2;
+  --ifm-color-primary-light: #7eb0ff;
+  --ifm-color-primary-lighter: #8fbbff;
+  --ifm-color-primary-lightest: #c3daff;
   --ifm-background-color: #0f1217;
   --ifm-background-surface-color: #161a21;
   --ifm-navbar-background-color: #12161c;
-  --docusaurus-highlighted-code-line-bg: rgba(111, 155, 255, 0.15);
-  --relvista-accent: #3cc7ae;
+  --docusaurus-highlighted-code-line-bg: rgba(91, 155, 255, 0.15);
 }
 
+/* Dark primary buttons: dark text on the light blue (6.8:1). */
+[data-theme='dark'] .button--primary {
+  --ifm-button-color: #0b1220;
+}
+
+/* Dark secondary buttons: a neutral surface with a border, not Infima's light grey block. */
+[data-theme='dark'] .button.button--secondary {
+  --ifm-button-background-color: var(--ifm-background-surface-color);
+  --ifm-button-border-color: var(--ifm-color-emphasis-300);
+  color: var(--ifm-font-color-base);
+}
+
+[data-theme='dark'] .button.button--secondary:hover {
+  --ifm-button-background-color: var(--ifm-color-emphasis-200);
+  --ifm-button-border-color: var(--ifm-color-emphasis-400);
+}
+
+:focus-visible {
+  outline: 2px solid var(--ifm-color-primary);
+  outline-offset: 2px;
+}
+
+/* A navy brand band in both modes, with the dark lockup (docusaurus.config.ts). */
 .footer--dark {
-  --ifm-footer-background-color: #12161c;
+  --ifm-footer-background-color: var(--relvista-navy);
+}
+
+.footer__logo {
+  margin-top: 0;
+}
+
+/* Infima sizes the navbar logo box at 2rem and the image at 100%: 28px per brand.md §9.1. */
+.navbar__logo {
+  height: 28px;
+}
+
+/* The theme dims the footer logo link to half opacity; the lockup is never shown faded. */
+.footer__bottom a:has(> .footer__logo) {
+  opacity: 1;
 }
 
 .gallery-stats {
@@ -46,4 +99,9 @@ details > summary code {
 /* The navbar's API item is a plain link (docusaurus.config.ts): active on the API pages. */
 html.plugin-id-api .navbar__link.rv-navbar-api {
   color: var(--ifm-navbar-link-active-color);
+}
+
+/* Light code blocks: #f6f7f9 on white needs an edge to read as a block. Dark mode needs none. */
+html[data-theme='light'] .theme-code-block {
+  border: 1px solid #e3e6eb;
 }

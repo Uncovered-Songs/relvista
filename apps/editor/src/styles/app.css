@@ -54,7 +54,7 @@ kbd {
 }
 
 a {
-  color: var(--ed-accent);
+  color: var(--ed-link);
 }
 
 :focus-visible {
@@ -232,18 +232,19 @@ a {
   min-width: 0;
 }
 
+/* r-link mark + outlined wordmark (brand/logo-*.svg). Same width as the old text logo (~90 px). */
 .ed-logo {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
+  gap: 5px;
   margin-right: 6px;
-  padding: 4px 6px 4px 2px;
+  padding: 4px 4px 4px 2px;
   border-radius: var(--ed-radius);
-  color: var(--ed-text);
-  font-weight: 700;
-  font-size: 15px;
-  letter-spacing: -0.01em;
   text-decoration: none;
+}
+
+.ed-logo svg {
+  display: block;
 }
 
 .ed-logo:hover {
@@ -658,6 +659,11 @@ body.ed-resizing .ed-split__sep {
 
 .ed-empty__card .ed-btn {
   cursor: pointer;
+}
+
+.ed-empty__mark {
+  display: block;
+  margin: 0 auto 12px;
 }
 
 .ed-empty__title {
@@ -1126,6 +1132,25 @@ body.ed-resizing .ed-split__sep {
   margin-top: 4px;
 }
 
+.ed-help__brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 22px 0 6px;
+  padding-top: 14px;
+  border-top: 1px solid var(--ed-border);
+}
+
+.ed-lockup {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ed-lockup svg {
+  display: block;
+}
+
 .ed-help__links {
   margin: 0;
   padding-left: 18px;
@@ -1294,7 +1319,7 @@ body.ed-resizing .ed-split__sep {
     gap: 2px;
   }
 
-  .ed-logo__text {
+  .ed-logo .ed-logo__text {
     display: none;
   }
 

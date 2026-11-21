@@ -1,5 +1,5 @@
 /**
- * The combined Pages site: docs at /relvista/, the editor at /relvista/editor/. Docs pages link to
+ * The combined Pages site: docs at /, the editor at /editor/. Docs pages link to
  * the editor, and "Open in editor" on a docs diagram lands in the editor with that diagram.
  */
 import { expect, test, type Page } from '@playwright/test';
@@ -18,33 +18,42 @@ async function editorReady(page: Page): Promise<void> {
 }
 
 test('the docs navbar links to the editor', async ({ page }) => {
-  await page.goto('/relvista/');
+  await page.goto('/');
   const link = page.locator('.navbar').getByRole('link', { name: 'Editor', exact: true });
-  await expect(link).toHaveAttribute('href', '/relvista/editor/');
+  await expect(link).toHaveAttribute('href', '/editor/');
   await link.click();
-  await expect(page).toHaveURL(/\/relvista\/editor\/$/);
+  await expect(page).toHaveURL(/\/editor\/$/);
   await expect(page.locator('.ed-app[data-ready="true"]')).toBeVisible();
 });
 
-test('/relvista/editor (no slash) redirects to the editor, like GitHub Pages', async ({ page }) => {
+test('the deployed Help dialog never shows the 0.0.0 placeholder version', async ({ page }) => {
+  await page.goto('/editor/');
+  await expect(page.locator('.ed-app[data-ready="true"]')).toBeVisible();
+  await page.getByRole('button', { name: 'Help and shortcuts' }).click();
+  const brand = page.locator('.ed-help__brand');
+  await expect(brand).toContainText(/editor( \d+\.\d+\.\d+\S*)?$/);
+  await expect(brand).not.toContainText('0.0.0');
+});
+
+test('/editor (no slash) redirects to the editor, like GitHub Pages', async ({ page }) => {
   const errors = trackErrors(page);
-  await page.goto('/relvista/editor');
-  await expect(page).toHaveURL(/\/relvista\/editor\/$/);
+  await page.goto('/editor');
+  await expect(page).toHaveURL(/\/editor\/$/);
   await expect(page.locator('.ed-app[data-ready="true"]')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
 test('landing page: "Open the editor" CTA', async ({ page }) => {
-  await page.goto('/relvista/');
+  await page.goto('/');
   await page.getByRole('link', { name: 'Open the editor' }).click();
-  await expect(page).toHaveURL(/\/relvista\/editor\/$/);
+  await expect(page).toHaveURL(/\/editor\/$/);
   await expect(page.locator('.ed-app[data-ready="true"]')).toBeVisible();
 });
 
 test('landing page: "Edit this example in the editor" opens the blog example', async ({ page }) => {
-  await page.goto('/relvista/');
+  await page.goto('/');
   const link = page.getByTestId('edit-in-editor');
-  await expect(link).toHaveAttribute('href', /^\/relvista\/editor\/#dbml=[A-Za-z0-9_-]+$/);
+  await expect(link).toHaveAttribute('href', /^\/editor\/#dbml=[A-Za-z0-9_-]+$/);
   await link.click();
   await editorReady(page);
   await expect(page.locator('.react-flow__node-rvTable')).toHaveCount(2);
@@ -52,11 +61,11 @@ test('landing page: "Edit this example in the editor" opens the blog example', a
 });
 
 test('gallery "Open in editor" lands in the editor with that DBML', async ({ page, context }) => {
-  await page.goto('/relvista/docs/gallery/02-ecommerce');
+  await page.goto('/docs/gallery/02-ecommerce');
   const viewer = page.locator('.relvista-diagram .rv-viewer').first();
   await expect(viewer).toHaveAttribute('data-rv-layout', 'done');
   const open = viewer.getByRole('link', { name: 'Open in editor' });
-  await expect(open).toHaveAttribute('href', /^\/relvista\/editor\/#dbml=/);
+  await expect(open).toHaveAttribute('href', /^\/editor\/#dbml=/);
   const [editor] = await Promise.all([context.waitForEvent('page'), open.click()]);
   await editorReady(editor);
   await expect(editor.locator('.react-flow__node-rvTable')).toHaveCount(13);
@@ -65,7 +74,7 @@ test('gallery "Open in editor" lands in the editor with that DBML', async ({ pag
 });
 
 test('gallery view diagram opens the editor in that view', async ({ page, context }) => {
-  await page.goto('/relvista/docs/gallery/08-diagram-views');
+  await page.goto('/docs/gallery/08-diagram-views');
   // The second diagram on the page is the featured DiagramView.
   const viewed = page.locator('.relvista-diagram').nth(1);
   await viewed.scrollIntoViewIfNeeded();
@@ -83,9 +92,9 @@ test('gallery view diagram opens the editor in that view', async ({ page, contex
 
 test('the theme choice is shared between the docs and the editor', async ({ page }) => {
   await page.emulateMedia({ colorScheme: 'light' });
-  await page.goto('/relvista/editor/');
+  await page.goto('/editor/');
   await expect(page.locator('.ed-app[data-ready="true"]')).toBeVisible();
   await page.evaluate(() => localStorage.setItem('theme', 'dark'));
-  await page.goto('/relvista/docs/getting-started');
+  await page.goto('/docs/getting-started');
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
 });

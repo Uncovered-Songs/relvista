@@ -29,7 +29,7 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['github']] : 'list',
   use: {
-    baseURL: `http://127.0.0.1:${port}/relvista/editor/`,
+    baseURL: `http://127.0.0.1:${port}/editor/`,
     deviceScaleFactor: 1,
     trace: 'retain-on-failure',
   },
@@ -51,7 +51,7 @@ export default defineConfig({
     command: preview
       ? `pnpm exec vite preview --host 127.0.0.1 --port ${port} --strictPort`
       : `node ../docs/scripts/serve-site.mjs --host 127.0.0.1 --port ${port}`,
-    url: `http://127.0.0.1:${port}/relvista/editor/`,
+    url: `http://127.0.0.1:${port}/editor/`,
     reuseExistingServer: false,
     timeout: 60_000,
     stdout: 'ignore',

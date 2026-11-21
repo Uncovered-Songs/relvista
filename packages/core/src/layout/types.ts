@@ -1,7 +1,7 @@
 /** Types for the relvista layout sidecar file (schema.dbml.layout.json), matching schemas/layout.schema.json. */
 
 /** The `$id` of the layout-1 JSON Schema, written as `$schema` into layout files. */
-export const LAYOUT_SCHEMA_ID = 'https://relvista.github.io/relvista/schemas/layout-1.json';
+export const LAYOUT_SCHEMA_ID = 'https://relvista.org/schemas/layout-1.json';
 /** The layout file format version this package reads and writes. */
 export const LAYOUT_VERSION = 1;
 /** View key for the default view. Named views inherit node placements from it. */

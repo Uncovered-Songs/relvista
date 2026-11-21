@@ -15,6 +15,7 @@ import {
   ShareIcon,
   SunIcon,
   SystemIcon,
+  Wordmark,
 } from './icons.js';
 import { MenuButton, type MenuItem } from './Menu.js';
 import { NewMenu, newMenuItems } from './NewMenu.js';
@@ -248,9 +249,9 @@ export function TopBar(): ReactElement {
 
   return (
     <header className="ed-topbar">
-      <a className="ed-logo" href={DOCS_URL} title="relvista docs">
+      <a className="ed-logo" href={DOCS_URL} title="relvista docs" aria-label="relvista docs">
         <Logo />
-        <span className="ed-logo__text">relvista</span>
+        <Wordmark className="ed-logo__text" height={15} />
       </a>
       <FileName />
       {narrow ? (

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Copies the editor app (apps/editor/dist) into the docs build, so one GitHub Pages artifact
-// serves the docs at /relvista/ and the editor at /relvista/editor/ (design phase2 §7.2).
+// serves the docs at / and the editor at /editor/ (design phase2 §7.2).
 import { cpSync, existsSync, rmSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';

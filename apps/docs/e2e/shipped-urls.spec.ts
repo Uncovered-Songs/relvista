@@ -1,5 +1,8 @@
-// The repository moved to github.com/relvista/relvista (decision 0002, amendment): the old Pages
-// host answers 404 for every path, so no shipped file may still point there.
+// The site moved twice before 1.0 (decision 0002, amendments): from uncovered-songs.github.io to
+// relvista.github.io/relvista, then to https://relvista.org. The old hosts answer 404 or will stop
+// serving relvista, so no shipped file may still point there. The only exception is the old layout
+// schema ids as exact strings (LEGACY_SCHEMA_IDS): files written with them stay valid, and docs may
+// name them as such.
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { expect, test } from '@playwright/test';
@@ -18,8 +21,20 @@ function walk(dir: string): string[] {
   return out;
 }
 
-test('no shipped file names the pre-move host', () => {
-  const STALE = /uncovered-songs\.github\.io|github\.com\/Uncovered-Songs/i;
+/** Old `$schema` ids that relvista still accepts (decision 0002). Identifiers only, never links. */
+const LEGACY_SCHEMA_IDS = [
+  'https://relvista.github.io/relvista/schemas/layout-1.json',
+  'https://uncovered-songs.github.io/relvista/schemas/layout-1.json',
+];
+const STALE =
+  /uncovered-songs\.github\.io|github\.com\/Uncovered-Songs|relvista\.github\.io\/relvista/i;
+
+/** The text with every legacy schema id taken out. */
+function withoutLegacyIds(text: string): string {
+  return LEGACY_SCHEMA_IDS.reduce((t, id) => t.split(id).join(''), text);
+}
+
+test('no shipped file names a pre-move host', () => {
   const shipped = [
     ...walk(`${siteDir}build`),
     'schemas/layout.schema.json',
@@ -39,7 +54,21 @@ test('no shipped file names the pre-move host', () => {
   const hits = shipped.filter(
     (f) =>
       /\.(html|js|mjs|cjs|css|json|map|md|txt|xml|svg|d\.ts)$/.test(f) &&
-      STALE.test(readFileSync(f, 'utf8')),
+      STALE.test(withoutLegacyIds(readFileSync(f, 'utf8'))),
   );
   expect(hits).toEqual([]);
+});
+
+test('the guard itself: legacy ids pass, other old URLs fail', () => {
+  for (const id of LEGACY_SCHEMA_IDS)
+    expect(STALE.test(withoutLegacyIds(`"$schema": "${id}"`))).toBe(false);
+  expect(STALE.test(withoutLegacyIds('https://relvista.github.io/relvista/editor/'))).toBe(true);
+  expect(STALE.test(withoutLegacyIds('https://uncovered-songs.github.io/relvista/'))).toBe(true);
+});
+
+test('the build is the relvista.org site: CNAME and the layout schema at its id', () => {
+  expect(readFileSync(`${siteDir}build/CNAME`, 'utf8')).toBe('relvista.org\n');
+  const schema = JSON.parse(readFileSync(`${siteDir}build/schemas/layout-1.json`, 'utf8'));
+  expect(schema.$id).toBe('https://relvista.org/schemas/layout-1.json');
+  expect(new URL(schema.$id).pathname).toBe('/schemas/layout-1.json');
 });

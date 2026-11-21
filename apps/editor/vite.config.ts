@@ -23,7 +23,7 @@ function thirdParty(options: { main: boolean }): Plugin {
         }
       }
       writePackageList('editor', bundled);
-      // The notices ship next to the app: /relvista/editor/THIRD_PARTY_NOTICES.txt.
+      // The notices ship next to the app: /editor/THIRD_PARTY_NOTICES.txt.
       if (options.main && existsSync(notices)) {
         this.emitFile({
           type: 'asset',
@@ -40,9 +40,9 @@ function thirdParty(options: { main: boolean }): Plugin {
 const emptyModule = fileURLToPath(new URL('./src/stubs/empty.ts', import.meta.url));
 const JSPDF_OPTIONAL = ['html2canvas', 'canvg', 'dompurify'];
 
-// Served at https://relvista.github.io/relvista/editor/ (copied into the docs build).
+// Served at https://relvista.org/editor/ (copied into the docs build).
 export default defineConfig({
-  base: process.env.RELVISTA_EDITOR_BASE ?? '/relvista/editor/',
+  base: process.env.RELVISTA_EDITOR_BASE ?? '/editor/',
   plugins: [react(), thirdParty({ main: true })],
   resolve: {
     alias: JSPDF_OPTIONAL.map((name) => ({

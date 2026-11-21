@@ -129,3 +129,11 @@ Build probe (Vite 7.3.8, base `/relvista/editor/`, Monaco `editor.api` + `featur
   the lockfile.
 - `editorLink()` (sync, phase 1) is replaced by `createEditorLink()` (async); nothing is published
   on npm yet, so no deprecation period.
+
+## Amendment 2026-11-21 — deploy path `/editor/` on `relvista.org`
+
+The site moved to the custom domain `https://relvista.org/` (decision 0002, second amendment). The
+editor is served at `https://relvista.org/editor/`: Vite's default `base` is `/editor/`
+(`RELVISTA_EDITOR_BASE` still overrides it), and the docs build still copies it to
+`apps/docs/build/editor/`. The theme is shared through `localStorage` on the `relvista.org` origin.
+The editor is AGPL-3.0-or-later (decision 0006).

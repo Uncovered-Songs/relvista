@@ -1,5 +1,6 @@
 import type { ReactElement } from 'react';
 import { store } from '../state/store.js';
+import { Logo } from './icons.js';
 import { mod } from './shortcutLabel.js';
 
 /** Over the code pane when the document is empty. */
@@ -15,6 +16,7 @@ export function EmptyState(): ReactElement {
           store.editor?.focus();
         }}
       >
+        <Logo size={40} className="ed-empty__mark" />
         <h2 className="ed-empty__title">Start typing DBML, or open an example</h2>
         <p className="ed-empty__text">
           <code>

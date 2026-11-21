@@ -199,7 +199,7 @@ test('theme toggle switches the diagram colour mode', async ({ page }) => {
 test('the navbar links to the editor, which is part of the build', async ({ page }) => {
   await page.goto('');
   const link = page.locator('.navbar').getByRole('link', { name: 'Editor', exact: true });
-  await expect(link).toHaveAttribute('href', '/relvista/editor/');
+  await expect(link).toHaveAttribute('href', '/editor/');
   // Served by the editor's own e2e (`docusaurus serve` strips the folder's trailing slash).
   const index = join(process.cwd(), 'build', 'editor', 'index.html');
   expect(existsSync(index)).toBe(true);
@@ -211,6 +211,6 @@ test('gallery diagrams link to the editor with their DBML', async ({ page }) => 
   const viewer = await settled(page.locator('.relvista-diagram').first());
   await expect(viewer.getByRole('link', { name: 'Open in editor' })).toHaveAttribute(
     'href',
-    /^\/relvista\/editor\/#dbml=[A-Za-z0-9_-]+/,
+    /^\/editor\/#dbml=[A-Za-z0-9_-]+/,
   );
 });

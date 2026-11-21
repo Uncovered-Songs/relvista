@@ -4,6 +4,7 @@ import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import CodeBlock from '@theme/CodeBlock';
 import DbmlDiagram from '@theme/DbmlDiagram';
 import Layout from '@theme/Layout';
+import ThemedImage from '@theme/ThemedImage';
 import { useEffect, useState, type ReactNode } from 'react';
 import ecommerce from '@site/../../examples/02-ecommerce.dbml';
 import styles from './index.module.css';
@@ -104,9 +105,18 @@ export default function Home(): ReactNode {
       <header className={styles.hero}>
         <div className="container">
           <div className={styles.heroText}>
-            <p className={styles.eyebrow}>Open source · MIT</p>
+            <p className={styles.eyebrow}>Open source · MIT libraries · AGPL editor</p>
             <h1 className={styles.title}>
-              <span className={styles.wordmark}>{siteConfig.title}</span>
+              <ThemedImage
+                className={styles.lockup}
+                alt={siteConfig.title}
+                sources={{
+                  light: useBaseUrl('/img/logo-light.svg'),
+                  dark: useBaseUrl('/img/logo-dark.svg'),
+                }}
+                width={536}
+                height={120}
+              />
             </h1>
             <p className={styles.tagline}>{siteConfig.tagline}</p>
             <p className={styles.lead}>

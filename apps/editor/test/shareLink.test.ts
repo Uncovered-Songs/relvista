@@ -60,9 +60,9 @@ describe('readShareHash', () => {
     for (const ex of exampleFiles()) {
       const link = await buildShareLink(
         { dbml: ex.text, layout: layout(), view: 'Core', includeLayout: true, includeView: true },
-        'https://example.org/relvista/editor/',
+        'https://example.org/editor/',
       );
-      expect(link.startsWith('https://example.org/relvista/editor/#dbml=')).toBe(true);
+      expect(link.startsWith('https://example.org/editor/#dbml=')).toBe(true);
       const r = await readShareHash(new URL(link).hash);
       expect(r.kind).toBe('share');
       if (r.kind !== 'share') return;
@@ -145,7 +145,7 @@ describe('share link with "Include position"', () => {
     const model = compileDbml(dbml).model!;
     const base = await buildShareLink(
       { dbml, layout: layout(), view: 'v', includeLayout: true, includeView: true },
-      'https://x.test/relvista/editor/',
+      'https://x.test/editor/',
     );
     const suffix = positionSuffix(
       {

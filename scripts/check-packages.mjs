@@ -21,7 +21,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { publint } from 'publint';
 import { formatMessage } from 'publint/utils';
-import { staleLicenses } from './copy-license.mjs';
+import { editorLicenseProblems, staleLicenses } from './copy-license.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const bin = (name) => join(root, 'node_modules', '.bin', name);
@@ -197,6 +197,7 @@ async function main() {
     staleLicenses().map((f) => `${f} differs from LICENSE (run node scripts/copy-license.mjs)`),
     'LICENSE copies',
   );
+  fail(editorLicenseProblems(), 'Editor licence (AGPL-3.0-or-later, decision 0006)');
 
   try {
     for (const { dir, built, attwExclude } of PACKAGES) {

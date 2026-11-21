@@ -36,7 +36,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       # Builds core → renderer → docusaurus-plugin → editor → docs; the docs build copies the editor into
-      # apps/docs/build/editor/, so one artifact serves /relvista/ and /relvista/editor/.
+      # apps/docs/build/editor/, so one artifact serves / and /editor/.
       - name: Build packages, editor and docs
         run: pnpm docs:build
 

@@ -21,6 +21,10 @@
   --ed-accent-text: #ffffff;
   --ed-accent-soft: #eaf1ff;
   --ed-focus: #2f6fed;
+  --ed-link: #2560d6;
+  --ed-logo-mark: #2f6fed;
+  --ed-logo-text: #0e1a33;
+  --ed-brand-teal: #14a38b;
   --ed-danger: #c22b2b;
   --ed-danger-soft: #fdecec;
   --ed-warning: #a14a07;
@@ -56,6 +60,10 @@
   --ed-accent-text: #0b1220;
   --ed-accent-soft: #1f2d45;
   --ed-focus: #5b9bff;
+  --ed-link: #5b9bff;
+  --ed-logo-mark: #ffffff;
+  --ed-logo-text: #ffffff;
+  --ed-brand-teal: #3cc7ae;
   --ed-danger: #ff7b7b;
   --ed-danger-soft: #3a1f24;
   --ed-warning: #e6b836;

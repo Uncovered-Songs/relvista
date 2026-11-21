@@ -29,7 +29,7 @@ function keys(hash: string): string[] {
 
 describe('share codec', () => {
   it('has the deployed editor as default URL', () => {
-    expect(DEFAULT_EDITOR_URL).toBe('https://relvista.github.io/relvista/editor/');
+    expect(DEFAULT_EDITOR_URL).toBe('https://relvista.org/editor/');
   });
 
   it.each(singleFile)('round-trips example %s', async (_name, text) => {

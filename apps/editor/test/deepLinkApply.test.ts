@@ -192,10 +192,10 @@ describe('mirror (state → URL hash)', () => {
     ).toBe('table=users');
   });
   it('replaces the hash, removes it for an empty target, never touches a share hash', () => {
-    const loc = (hash: string) => ({ pathname: '/relvista/editor/', search: '?x=1', hash });
-    expect(mirroredUrl(loc(''), { table: 'users' })).toBe('/relvista/editor/?x=1#table=users');
+    const loc = (hash: string) => ({ pathname: '/editor/', search: '?x=1', hash });
+    expect(mirroredUrl(loc(''), { table: 'users' })).toBe('/editor/?x=1#table=users');
     expect(mirroredUrl(loc('#table=users'), { table: 'users' })).toBeNull();
-    expect(mirroredUrl(loc('#table=users'), {})).toBe('/relvista/editor/?x=1');
+    expect(mirroredUrl(loc('#table=users'), {})).toBe('/editor/?x=1');
     expect(mirroredUrl(loc(''), {})).toBeNull();
     expect(mirroredUrl(loc('#dbml=abc'), { table: 'users' })).toBeNull();
     expect(mirroredUrl(loc('#view=v&dbml=abc'), { table: 'users' })).toBeNull();

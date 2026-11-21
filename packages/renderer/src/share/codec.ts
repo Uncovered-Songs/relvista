@@ -15,7 +15,7 @@ export interface SharePayload {
 }
 
 /** The hosted relvista editor, the default target of "Open in editor" links. */
-export const DEFAULT_EDITOR_URL = 'https://relvista.github.io/relvista/editor/';
+export const DEFAULT_EDITOR_URL = 'https://relvista.org/editor/';
 
 /** Bytes per `String.fromCharCode(...chunk)` call (stays under engines' argument limits). */
 const CHUNK = 0x8000;
@@ -119,7 +119,7 @@ function stripBom(text: string): string {
  * import { decodeShareHash, encodeShareHash } from '@relvista/renderer';
  *
  * const hash = await encodeShareHash({ dbml: source, view: 'billing' });
- * const url = `https://relvista.github.io/relvista/editor/#${hash}`;
+ * const url = `https://relvista.org/editor/#${hash}`;
  * // … and back:
  * const payload = await decodeShareHash(new URL(url).hash);
  * ```

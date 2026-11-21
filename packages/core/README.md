@@ -1,3 +1,5 @@
+<img src="https://raw.githubusercontent.com/relvista/relvista/main/brand/icons/icon-192.png" width="48" height="48" alt="">
+
 # @relvista/core
 
 The framework-free core of **relvista**: it compiles [DBML](https://dbml.dbdiagram.io/docs/) into a
@@ -8,8 +10,8 @@ DBML is parsed by the official [`@dbml/parse`](https://github.com/holistics/dbml
 exact version), so any file dbdiagram.io accepts compiles here. relvista never rewrites a `.dbml`
 file: positions and other diagram state go in the layout file next to it.
 
-Documentation: <https://relvista.github.io/relvista/> · API reference:
-<https://relvista.github.io/relvista/docs/api/>
+Documentation: <https://relvista.org/> · API reference:
+<https://relvista.org/docs/api/>
 
 ## Install
 

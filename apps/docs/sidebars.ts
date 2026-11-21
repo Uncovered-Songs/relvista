@@ -7,7 +7,7 @@ const sidebars: SidebarsConfig = {
     // link, so it is not prefetched with every docs page (see the navbar's API item).
     {
       type: 'html',
-      value: '<a class="menu__link" href="/relvista/docs/api/">API reference</a>',
+      value: '<a class="menu__link" href="/docs/api/">API reference</a>',
       defaultStyle: true,
     },
   ],
