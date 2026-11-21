@@ -14,18 +14,19 @@ site's theme ([decision 0005](../docs/decisions/0005-plugin-name.md)).
 | ---------------------------------------- | ---------------------------------------------------------------------- | --------------------------------------------------------------------- |
 | `mark.svg`                               | r-link mark: blue `#2f6fed` stroke, teal `#14a38b` dot, transparent    | mark on light backgrounds, 20 px and up                               |
 | `mark-white.svg`                         | white stroke, teal dot                                                 | mark on dark or navy backgrounds                                      |
-| `favicon.svg`                            | gradient rounded tile with a white mark                                | favicons, app icons, any mark below 20 px                             |
-| `avatar.svg`, `avatar.png` (500)         | full-bleed gradient square, white mark                                 | GitHub and npm avatars, blog author image                             |
+| `favicon.svg`                            | the mark, transparent, cropped; lighter blue in dark browser chrome    | favicons                                                              |
+| `avatar.png`, `avatar-soft.png` (500)    | the mark on white / on the banner's soft blue-teal wash                | GitHub org avatar (owner's choice), npm avatar                        |
 | `logo-light.svg`                         | lockup: mark + "relvista" wordmark (Manrope Bold, outlined), navy text | light backgrounds                                                     |
 | `logo-dark.svg`                          | lockup: white mark, teal dot, white text                               | dark and navy backgrounds                                             |
-| `banner.svg`, `banner.png`               | 1280×400 gradient, white lockup and tagline                            | GitHub org profile                                                    |
-| `social-preview.svg`, `.png`             | 1280×640, same design                                                  | `og:image` / `twitter:image` for docs and editor, repo social preview |
+| `banner-light.png`, `banner-dark.png`    | 1280×400, the relvista.org home-page hero (light and dark)             | GitHub org profile (`<picture>` per colour scheme)                    |
+| `social-preview.png`                     | 1280×640, the home-page hero, light                                    | `og:image` / `twitter:image` for docs and editor, repo social preview |
 | `icons/favicon-32.png`                   | 32 px, from `favicon.svg`                                              | PNG favicon                                                           |
-| `icons/apple-touch-icon.png`             | 180 px, from `avatar.svg`, opaque (iOS rounds it)                      | `apple-touch-icon`                                                    |
-| `icons/icon-192.png`, `icon-512.png`     | from `favicon.svg`                                                     | web manifest, `purpose: any`; npm README tile                         |
-| `icons/icon-maskable-512.png`            | from `avatar.svg`; the mark stays inside the 80 % safe circle          | web manifest, `purpose: maskable`                                     |
+| `icons/apple-touch-icon.png`             | 180 px, the mark on white, opaque (iOS rounds it)                      | `apple-touch-icon`                                                    |
+| `icons/icon-192.png`, `icon-512.png`     | the mark on white                                                      | web manifest, `purpose: any`; npm README tile                         |
+| `icons/icon-maskable-512.png`            | the mark on white, inside the 80 % safe circle                         | web manifest, `purpose: maskable`                                     |
 | `source/final.mjs`, `source/outline.mjs` | SVG generator                                                          | regeneration, below                                                   |
 | `source/rasterize.mjs`                   | PNG renderer (the repo's Playwright)                                   | regeneration, below                                                   |
+| `source/render-org.mjs`                  | site-style banners, social preview and avatars (the repo's Playwright) | `node brand/source/render-org.mjs <out-dir>` from the repo root       |
 | `source/MANROPE-OFL.txt`                 | Manrope font licence (SIL OFL 1.1)                                     | the wordmark is outlined from Manrope                                 |
 
 ## Logo rules
@@ -34,8 +35,7 @@ site's theme ([decision 0005](../docs/decisions/0005-plugin-name.md)).
 - Dark and navy backgrounds: `logo-dark.svg` or `mark-white.svg`. Never the light lockup: its navy
   text disappears.
 - On the gradient: white mark and white text only.
-- Minimum size: 20 px tall for the lockup and for the bare mark. Below 20 px, use the `favicon.svg`
-  tile.
+- Minimum size: 20 px tall for the lockup. The bare mark works down to 16 px (`favicon.svg`).
 - Clear space: at least 25 % of the logo's height on every side.
 - The wordmark is artwork. Always use the outlined SVG. Never set "relvista" in live text as a logo,
   never as gradient text, and never stretch, recolour, outline, shadow or rotate it. In prose and UI,
@@ -58,9 +58,9 @@ Contrast: `#2f6fed` passes AA on white only (4.55:1); on grey or tinted backgrou
 Teal `#14a38b` on white is 3.16:1, so it is for graphics, not text. The full table is in
 [docs/design/brand.md §4](../docs/design/brand.md#4-colour-tokens).
 
-The gradient is for brand moments: favicon and app icons, avatar, banner and social preview. Not for
-navbars, buttons, focus rings, borders or text. Text on the gradient is white and large (24 px, or
-19 px bold).
+The look follows relvista.org: white (or dark) surfaces with a soft blue-and-teal wash, as in the home
+hero, the docs and editor top bars, the org banner and the social preview. The full 135° gradient is
+not used in the UI: not for navbars, buttons, focus rings, borders or text.
 
 ## Fonts
 
@@ -88,8 +88,11 @@ npm i --prefix /tmp/relvista-fontkit --no-save fontkit@2
 NODE_PATH=/tmp/relvista-fontkit/node_modules node brand/source/final.mjs /tmp/Manrope.ttf
 # or: MANROPE_TTF=/tmp/Manrope.ttf NODE_PATH=… node brand/source/final.mjs
 
-# 4. PNGs, written into brand/ and brand/icons/
+# 4. PNG icons, written into brand/icons/
 node brand/source/rasterize.mjs
+
+# 5. avatars, banners and social preview (site style), written into brand/
+node brand/source/render-org.mjs brand
 ```
 
 With that font file, step 3 reproduces every SVG byte for byte. Step 4 makes the PNGs at the same
@@ -104,7 +107,7 @@ Then copy what changed into the two sites (each ships its own copy):
 | `icons/*.png` (all five)                   | yes                        | yes                      |
 | `social-preview.png`                       | yes                        | yes                      |
 | `logo-light.svg`, `logo-dark.svg`          | yes                        | no                       |
-| `mark.svg`, `mark-white.svg`, `avatar.svg` | yes                        | no                       |
+| `mark.svg`, `mark-white.svg`, `avatar.png` | yes                        | no                       |
 
 The editor draws the mark and the wordmark inline in `apps/editor/src/components/icons.tsx`
 (the paths from `mark.svg` and `logo-light.svg`). Update those paths too if the artwork changes.

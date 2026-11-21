@@ -1,6 +1,7 @@
 import { fileURLToPath } from 'node:url';
 import type { Config, Plugin } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
+import type { PluginOptions as DocsPluginOptions } from '@docusaurus/plugin-content-docs';
 import { themes as prismThemes } from 'prism-react-renderer';
 
 /**
@@ -34,6 +35,42 @@ function mermaidLayoutElkStub(): Plugin {
   };
 }
 
+/**
+ * A second docs instance whose content lives outside the site directory
+ * (../docs-compat-catalog/docs): CommonMark `.md` sheets whose front matter holds nested objects
+ * with their own `id` keys, and a custom sidebar generator, the layout of a data catalog. Its pages
+ * must render with relvista registered, and its ```dbml fences become diagrams.
+ */
+const shortLabels: DocsPluginOptions['sidebarItemsGenerator'] = async ({
+  defaultSidebarItemsGenerator,
+  ...args
+}) => {
+  const items = await defaultSidebarItemsGenerator(args);
+  const titles = new Map(args.docs.map((d) => [d.id, d.title]));
+  return items.map((it) =>
+    it.type === 'category'
+      ? {
+          ...it,
+          items: it.items.map((child) =>
+            child.type === 'doc'
+              ? { ...child, label: titles.get(child.id)?.split(' - ')[0]?.trim() }
+              : child,
+          ),
+        }
+      : it,
+  );
+};
+
+const catalogDocs: [string, Partial<DocsPluginOptions>] = [
+  '@docusaurus/plugin-content-docs',
+  {
+    id: 'catalog',
+    path: '../docs-compat-catalog/docs',
+    routeBasePath: 'catalog',
+    sidebarItemsGenerator: shortLabels,
+  },
+];
+
 const config: Config = {
   title: 'Compat fixture',
   url: 'http://localhost',
@@ -41,7 +78,8 @@ const config: Config = {
   trailingSlash: false,
   onBrokenLinks: 'throw',
   i18n: { defaultLocale: 'en', locales: ['en'] },
-  markdown: { mermaid: true },
+  // .md files are CommonMark, .mdx files MDX (the catalog sheets have braces MDX would parse).
+  markdown: { mermaid: true, format: 'detect' },
 
   presets: [
     [
@@ -58,7 +96,11 @@ const config: Config = {
   themes: ['@docusaurus/theme-mermaid', '@docusaurus/theme-live-codeblock'],
 
   // The recommended registration (docs: getting started).
-  plugins: [mermaidLayoutElkStub, ...(baseline ? [] : ['@relvista/docusaurus-plugin'])],
+  plugins: [
+    mermaidLayoutElkStub,
+    ...(baseline ? [] : ['@relvista/docusaurus-plugin']),
+    catalogDocs,
+  ],
 
   themeConfig: {
     colorMode: { defaultMode: 'light', respectPrefersColorScheme: false },
@@ -67,6 +109,7 @@ const config: Config = {
       items: [
         { to: '/', label: 'All fences', position: 'left' },
         { to: '/markdown', label: 'Markdown', position: 'left' },
+        { to: '/catalog/systems/toll-db', label: 'Catalog', position: 'left' },
       ],
     },
     prism: { theme: prismThemes.oneLight, darkTheme: prismThemes.oneDark },

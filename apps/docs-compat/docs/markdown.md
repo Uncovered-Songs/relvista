@@ -4,7 +4,7 @@ title: Markdown
 
 # A plain Markdown page
 
-The same fences in a `.md` file (CommonMark-flavoured MDX).
+The same fences in a `.md` file (CommonMark: the site sets `markdown.format: 'detect'`).
 
 ```dbml
 Table authors {

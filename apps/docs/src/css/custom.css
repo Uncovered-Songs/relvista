@@ -77,6 +77,28 @@ html[data-theme='dark'] {
   margin-top: 0;
 }
 
+/* Top bar: the banner's soft teal (left) and blue (right) wash over the navbar colour. The editor's
+   top bar uses the same values (apps/editor/src/styles/tokens.css, --ed-topbar-wash). */
+.navbar {
+  background-image: linear-gradient(
+    90deg,
+    rgba(20, 163, 139, 0.1) 0%,
+    transparent 30%,
+    transparent 65%,
+    rgba(47, 111, 237, 0.12) 100%
+  );
+}
+
+html[data-theme='dark'] .navbar {
+  background-image: linear-gradient(
+    90deg,
+    rgba(60, 199, 174, 0.1) 0%,
+    transparent 30%,
+    transparent 65%,
+    rgba(91, 155, 255, 0.12) 100%
+  );
+}
+
 /* Infima sizes the navbar logo box at 2rem and the image at 100%: 28px per brand.md §9.1. */
 .navbar__logo {
   height: 28px;

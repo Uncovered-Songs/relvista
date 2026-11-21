@@ -52,11 +52,20 @@ display:flex;flex-direction:column;align-items:center;justify-content:center;gap
     await p.screenshot({ path: `${out}/${n}.png` });
     await p.close();
   }
-  // avatar: white tile, mark as in the navbar
-  const p = await b.newPage({ viewport: { width: 500, height: 500 } });
-  await p.setContent(
-    `<html><body style="margin:0;background:#fff;display:grid;place-items:center;height:500px"><div style="width:300px;height:300px;transform:translate(-16px,-8px)">${mark.replace('<svg', '<svg width="300" height="300"')}</div></body></html>`,
-  );
-  await p.screenshot({ path: `${out}/avatar.png` });
+  // avatars: the mark as in the navbar, on white and on the banner's soft blue/teal wash
+  const grounds = {
+    avatar: '#fff',
+    'avatar-soft':
+      'radial-gradient(420px 380px at 100% 0%, rgba(47,111,237,0.20), transparent 70%),' +
+      'radial-gradient(380px 380px at 0% 100%, rgba(20,163,139,0.20), transparent 70%), #fff',
+  };
+  for (const [name, bg] of Object.entries(grounds)) {
+    const p = await b.newPage({ viewport: { width: 500, height: 500 } });
+    await p.setContent(
+      `<html><body style="margin:0;background:${bg};display:grid;place-items:center;height:500px"><div style="width:300px;height:300px;transform:translate(-16px,-8px)">${mark.replace('<svg', '<svg width="300" height="300"')}</div></body></html>`,
+    );
+    await p.screenshot({ path: `${out}/${name}.png` });
+    await p.close();
+  }
   await b.close();
 })();

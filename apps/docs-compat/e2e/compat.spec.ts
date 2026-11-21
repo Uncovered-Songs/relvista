@@ -268,3 +268,51 @@ test('an SVG export has the colours and fonts the page shows', async ({ page }) 
     expect(svg).toContain('Courier New');
   }
 });
+
+// A second docs instance whose content is outside the site directory (../docs-compat-catalog),
+// with CommonMark `.md` sheets whose front matter has nested objects with their own `id` keys.
+test.describe('the catalog docs instance', () => {
+  test('its pages render, with their metadata', async ({ page }) => {
+    const errors: string[] = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await open(page, 'catalog/products/traffic', 'light');
+    await expect(page.locator('article h1')).toHaveText('Traffic data product');
+    // CommonMark: braces stay text.
+    await expect(page.locator('article')).toContainText('{hour, plaza_id} -> vehicles');
+    // The sidebar (labels from the custom generator) and the pager come from the doc metadata.
+    const sidebar = page.locator('.theme-doc-sidebar-container');
+    await expect(sidebar.getByRole('link', { name: 'Traffic data product' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    );
+    await expect(page.locator('.pagination-nav__link--next')).toContainText(
+      'Toll database (PostgreSQL)',
+    );
+    await page.locator('article').getByRole('link', { name: 'toll database' }).click();
+    await expect(page).toHaveURL(/\/catalog\/systems\/toll-db$/);
+    await expect(page.locator('article h1')).toHaveText('Toll database');
+    await expect(page.locator('article')).toContainText('as in id < 1000');
+    expect(errors).toEqual([]);
+  });
+
+  test('its dbml fence becomes a diagram, drawn at build time too', async ({ page, request }) => {
+    const html = await (await request.get('catalog/systems/toll-db')).text();
+    expect(html).toContain('class="rv-diagram"');
+
+    await open(page, 'catalog/systems/toll-db', 'light');
+    const diagram = page.locator('.relvista-diagram');
+    await expect(diagram).toHaveCount(1);
+    const viewer = await settled(diagram);
+    await expect(viewer.locator('.react-flow__node-rvTable')).toHaveCount(2);
+    await expectRefLines(viewer, 1);
+    await expect(viewer.getByText('toll.dbml')).toBeVisible();
+    await page.screenshot({ path: join(SHOTS, 'compat-catalog.png'), fullPage: true });
+  });
+
+  test('without relvista the same pages render, the fence as code', async ({ page }) => {
+    await open(page, `${BASELINE}catalog/systems/toll-db`, 'light');
+    await expect(page.locator('article h1')).toHaveText('Toll database');
+    await expect(page.locator('.relvista-diagram')).toHaveCount(0);
+    await expect(page.locator('article pre')).toContainText('Table transactions');
+  });
+});

@@ -13,14 +13,12 @@ const { chromium } = require('@playwright/test');
 // [source SVG, output PNG, width, height, transparent background]
 const jobs = [
   ['favicon.svg', 'icons/favicon-32.png', 32, 32, true],
-  ['avatar.svg', 'icons/apple-touch-icon.png', 180, 180, true],
-  ['favicon.svg', 'icons/icon-192.png', 192, 192, true],
-  ['favicon.svg', 'icons/icon-512.png', 512, 512, true],
-  ['avatar.svg', 'icons/icon-maskable-512.png', 512, 512, true],
-  ['avatar.svg', 'avatar.png', 500, 500, false],
-  ['banner.svg', 'banner.png', 1280, 400, false],
-  ['social-preview.svg', 'social-preview.png', 1280, 640, false],
+  ['source/tile.svg', 'icons/apple-touch-icon.png', 180, 180, false],
+  ['source/tile.svg', 'icons/icon-192.png', 192, 192, false],
+  ['source/tile.svg', 'icons/icon-512.png', 512, 512, false],
+  ['source/tile-maskable.svg', 'icons/icon-maskable-512.png', 512, 512, false],
 ];
+// avatar.png, avatar-soft.png, banner-*.png and social-preview.png: node brand/source/render-org.mjs brand
 
 mkdirSync(`${brand}icons`, { recursive: true });
 const browser = await chromium.launch();

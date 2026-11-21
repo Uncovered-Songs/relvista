@@ -6,6 +6,14 @@
 :root,
 :root[data-theme='light'] {
   color-scheme: light;
+  /* The banner's soft teal (left) and blue (right) wash; same values as the docs navbar. */
+  --ed-topbar-wash: linear-gradient(
+    90deg,
+    rgba(20, 163, 139, 0.1) 0%,
+    transparent 30%,
+    transparent 65%,
+    rgba(47, 111, 237, 0.12) 100%
+  );
   --ed-bg: #f6f7f9;
   --ed-surface: #ffffff;
   --ed-surface-raised: #ffffff;
@@ -45,6 +53,13 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
+  --ed-topbar-wash: linear-gradient(
+    90deg,
+    rgba(60, 199, 174, 0.1) 0%,
+    transparent 30%,
+    transparent 65%,
+    rgba(91, 155, 255, 0.12) 100%
+  );
   --ed-bg: #0f1217;
   --ed-surface: #1a1f28;
   --ed-surface-raised: #212734;

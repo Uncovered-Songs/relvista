@@ -227,7 +227,7 @@ a {
   gap: 4px;
   min-height: var(--ed-topbar-h);
   padding: 0 10px 0 12px;
-  background: var(--ed-surface);
+  background: var(--ed-topbar-wash), var(--ed-surface);
   border-bottom: 1px solid var(--ed-border);
   min-width: 0;
 }
