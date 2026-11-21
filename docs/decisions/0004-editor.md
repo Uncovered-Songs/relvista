@@ -1,6 +1,6 @@
 # 0004 — Editor: Monaco bundling, deploy path, share format, save semantics
 
-- Status: proposed
+- Status: accepted (owner, 2026-11-21)
 - Date: 2026-11-20
 - Source: phase 2 design (`docs/design/phase2-editor.md`), research on `@dbml/parse` 12.1.0,
   `monaco-editor` 0.57.0 and a Vite 7 build probe
