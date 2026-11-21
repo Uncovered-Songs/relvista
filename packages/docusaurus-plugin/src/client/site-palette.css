@@ -1,0 +1,119 @@
+/*
+ * The site palette (themeConfig.dbml.palette: 'site', the default): diagrams take their colours
+ * and fonts from the site's Infima variables, so they follow its primary colour, surfaces, text
+ * and fonts in light and dark mode.
+ *
+ * Loaded after @relvista/renderer/styles.css and, like its palettes, declared with zero
+ * specificity: any rule in the site's custom.css that sets a --rv-* variable wins over it.
+ * Muted tones are mixes of the site's text colour into its surface colour, so they work with any
+ * surface colour. The table header band and the accent need contrast maths: the plugin computes
+ * them from the site's colours in the browser (--rv-site-header-bg, --rv-site-header-text,
+ * --rv-site-accent, set on the viewer); the values after the comma are the first paint.
+ */
+:where(.rv-viewer.rv-palette-site) {
+  /* keep in sync with SITE_CANVAS_BG in src/sitePalette.ts */
+  --rv-canvas-bg: color-mix(
+    in srgb,
+    var(--ifm-color-emphasis-100) 70%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-grid-dot: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 16%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-table-bg: var(--ifm-background-surface-color);
+  --rv-table-border: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 18%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-header-bg: var(--rv-site-header-bg, var(--ifm-color-primary-darkest));
+  --rv-header-text: var(--rv-site-header-text, #ffffff);
+  --rv-row-text: var(--ifm-font-color-base);
+  --rv-type-text: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 55%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-row-divider: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 8%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-row-highlight: color-mix(
+    in srgb,
+    var(--ifm-color-primary) 14%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-fk-marker: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 60%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-badge-bg: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 8%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-badge-text: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 60%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-ref-stroke: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 42%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-ref-highlight: var(--rv-site-accent, var(--ifm-color-primary));
+  --rv-group-default: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 55%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-note-bg: var(--ifm-color-warning-contrast-background);
+  --rv-note-border: color-mix(
+    in srgb,
+    var(--ifm-color-warning) 45%,
+    var(--ifm-color-warning-contrast-background)
+  );
+  --rv-note-text: var(--ifm-color-warning-contrast-foreground);
+  --rv-selection: var(--rv-site-accent, var(--ifm-color-primary));
+  /* --rv-pk-marker, --rv-note-indicator and --rv-table-shadow keep relvista's values. */
+
+  /* UI chrome: toolbar, title chip, cards, menus, error banner */
+  --rv-ui-bg: color-mix(in srgb, var(--ifm-background-surface-color) 94%, transparent);
+  --rv-ui-solid: var(--ifm-background-surface-color);
+  --rv-ui-border: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 18%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-ui-text: var(--ifm-font-color-base);
+  --rv-ui-muted: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 65%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-ui-hover: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 8%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-ui-active: color-mix(
+    in srgb,
+    var(--ifm-font-color-base) 14%,
+    var(--ifm-background-surface-color)
+  );
+  --rv-ui-focus: var(--rv-site-accent, var(--ifm-color-primary));
+  --rv-error-bg: var(--ifm-color-danger-contrast-background);
+  --rv-error-border: color-mix(
+    in srgb,
+    var(--ifm-color-danger) 40%,
+    var(--ifm-color-danger-contrast-background)
+  );
+  --rv-error-text: var(--ifm-color-danger-contrast-foreground);
+  --rv-font: var(--ifm-font-family-base);
+  --rv-mono: var(--ifm-font-family-monospace);
+}

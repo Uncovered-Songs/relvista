@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { METRICS, compileDbml, layoutDiagram, type Box, type DiagramModel } from '@relvista/core';
 import { describe, expect, it } from 'vitest';
 import { fanOffsets, routeAll, type RefRoute } from '../src/svg/routing.js';
+import { shrunkenRestore } from '../src/canvas/DiagramCanvas.js';
 import { fitViewport, initialViewport, type Padding } from '../src/viewer/initialView.js';
 
 const PAD: Padding = { top: 64, right: 28, bottom: 28, left: 28 };
@@ -28,13 +29,31 @@ function screen(b: Box, vp: { x: number; y: number; zoom: number }): Box {
 }
 
 describe('fitViewport', () => {
-  it('centres the whole diagram in the padded area', () => {
+  it('centres a small diagram in the whole viewer, not just the padded area', () => {
     const bounds = { x: 100, y: 50, width: 400, height: 200 };
     const vp = fitViewport({ bounds, width: 1000, height: 600, padding: PAD, maxZoom: 1.25 })!;
     expect(vp.zoom).toBe(1.25);
     const s = screen(bounds, vp);
-    expect(s.x - PAD.left).toBeCloseTo(1000 - PAD.right - (s.x + s.width));
-    expect(s.y - PAD.top).toBeCloseTo(600 - PAD.bottom - (s.y + s.height));
+    // Equal margins on both axes: a tall title band does not push the diagram down.
+    expect(s.x).toBeCloseTo(1000 - (s.x + s.width));
+    expect(s.y).toBeCloseTo(600 - (s.y + s.height));
+  });
+
+  it('keeps a diagram that fills an axis out of the padding', () => {
+    const bounds = { x: 0, y: 0, width: 400, height: 400 };
+    const vp = fitViewport({ bounds, width: 1000, height: 600, padding: PAD, maxZoom: 2 })!;
+    const s = screen(bounds, vp);
+    expect(s.y).toBeCloseTo(PAD.top);
+    expect(s.y + s.height).toBeCloseTo(600 - PAD.bottom);
+    expect(s.x).toBeCloseTo(1000 - (s.x + s.width));
+  });
+
+  it('centres in the whole viewer only as far as the padding allows', () => {
+    // 600 - 64 - 28 = 508 free; a 480 px tall diagram centred in 600 would start at 60 < 64.
+    const bounds = { x: 0, y: 0, width: 100, height: 480 };
+    const vp = fitViewport({ bounds, width: 1000, height: 600, padding: PAD, maxZoom: 1 })!;
+    const s = screen(bounds, vp);
+    expect(s.y).toBeCloseTo(PAD.top);
   });
 
   it('is null without a size', () => {
@@ -279,5 +298,45 @@ Ref: products.id <> tags.id
         seen.add(k);
       }
     }
+  });
+});
+
+describe('initialViewport centring', () => {
+  it('centres a wide diagram vertically in the whole viewer when it opens at the readable zoom', () => {
+    const nodes = Array.from({ length: 8 }, (_, i) => ({
+      x: i * 250,
+      y: 0,
+      width: 200,
+      height: 200,
+    }));
+    const bounds = { x: 0, y: 0, width: 1950, height: 200 };
+    const vp = initialViewport({
+      bounds,
+      nodes,
+      width: 1000,
+      height: 600,
+      padding: PAD,
+      maxZoom: 1.15,
+      minZoom: 0.85,
+      fitFloor: 0.55,
+    })!;
+    expect(vp.zoom).toBe(0.85);
+    const s = screen(bounds, vp);
+    expect(s.y).toBeCloseTo(600 - (s.y + s.height));
+    // Horizontally it starts at the padding, on the first table.
+    expect(s.x).toBeCloseTo(PAD.left);
+  });
+});
+
+describe('shrunkenRestore', () => {
+  const b = { x: 0, y: 0, width: 1500, height: 400 };
+  const size = { width: 1500, height: 1300 };
+  it('drops a restored viewport that shows the whole diagram much smaller than the fit', () => {
+    // Saved in a 600 px pane at 0.75, restored into a 1500 px one.
+    expect(shrunkenRestore({ x: 24, y: 150, zoom: 0.35 }, b, size, PAD)).toBe(true);
+  });
+  it('keeps one the user zoomed into, or one already near the fit', () => {
+    expect(shrunkenRestore({ x: -300, y: 0, zoom: 1.2 }, b, size, PAD)).toBe(false);
+    expect(shrunkenRestore({ x: 24, y: 150, zoom: 0.95 }, b, size, PAD)).toBe(false);
   });
 });

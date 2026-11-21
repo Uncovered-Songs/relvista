@@ -29,7 +29,7 @@ your machine.
 
 DBML cannot store table positions, so the editor keeps them in a small file next to your schema:
 `schema.dbml` gets `schema.dbml.layout.json` (the [layout file](./layout-file.md) the Docusaurus
-theme reads too). It is written only after you change the layout: opening and saving a file never
+plugin reads too). It is written only after you change the layout: opening and saving a file never
 creates one.
 
 **Open folder** is the best way to work. The editor then reads and writes the sidecar silently, and
@@ -37,15 +37,33 @@ multi-file projects resolve their `use` imports. The entry file is `main.dbml` i
 otherwise the only `.dbml` file at the top, otherwise you pick it. When you open a single file
 instead, the first save that needs a sidecar asks you once where to put it.
 
-You can also open a file from a URL (`?url=https://…`, GitHub `blob` links work), drop files on the
-window, or start from one of the [gallery examples](./gallery/index.mdx).
+You can also open a file from a URL, drop files on the window, or start from one of the
+[gallery examples](./gallery/index.mdx).
+
+### Opening a URL
+
+**Open › Open from URL…** or a link to the editor with `?url=` downloads a `.dbml` file from any
+server that allows cross-origin requests (CORS); GitHub `blob` links are rewritten to their raw
+file. Only the `.dbml` file is requested unless you ask for its layout too, because probing for a
+layout file that does not exist shows up as a 404 error in the browser console:
+
+| Link                                                | Layout                                                    |
+| --------------------------------------------------- | --------------------------------------------------------- |
+| `/relvista/editor/?url=<file>`                      | none: tables are placed automatically                     |
+| `/relvista/editor/?url=<file>&layout`               | `<file>.layout.json` next to it, if there is one          |
+| `/relvista/editor/?url=<file>&layout=<layout file>` | that file (a full URL, or a path relative to the `.dbml`) |
+
+In the dialog, **Also load its layout file** does the same as `&layout`. Encode the file URL
+(`encodeURIComponent`) when it has its own query string.
 
 ## Saving guarantees
 
 relvista never reformats your file. A file you open and save unchanged is written back **byte for
 byte**. When you edit it, only the lines you changed change: the byte order mark, CRLF, LF or mixed
 line endings and the presence of a final newline are kept. Every example in the repository is
-checked this way, in seven line-ending variants, on every commit.
+checked this way, in twelve variants (line endings, BOM, tabs, trailing whitespace, unicode), on
+every commit, together with a hand-written file that uses every DBML feature and edge cases such as
+empty files and a lone CR.
 
 Your work is also autosaved in the browser (IndexedDB). Reloading the page brings back the text,
 the layout and the view; **Open ▸ Restore previous session** goes one step further back. If you try
@@ -69,7 +87,7 @@ the full list.
 | Keys                                                                       | Action                                          |
 | -------------------------------------------------------------------------- | ----------------------------------------------- |
 | <kbd>Mod</kbd>+<kbd>S</kbd>                                                | Save                                            |
-| <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>                               | Save as                                         |
+| <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>S</kbd>                               | Save as (Save folder as… for a folder)          |
 | <kbd>Mod</kbd>+<kbd>O</kbd>                                                | Open file                                       |
 | <kbd>Mod</kbd>+<kbd>Z</kbd> / <kbd>Mod</kbd>+<kbd>Shift</kbd>+<kbd>Z</kbd> | Undo / redo (text in the code, else layout)     |
 | <kbd>Mod</kbd>+<kbd>Alt</kbd>+<kbd>L</kbd>                                 | Auto-layout (keeps pinned tables)               |

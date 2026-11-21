@@ -198,7 +198,7 @@ export function components(graph: LayoutGraph): LayoutGraph[] {
     if (!set) byRoot.set(r, (set = new Set()));
     set.add(n.id);
   }
-  return [...byRoot.values()].map((ids) => subgraph(graph, (n) => ids.has(n.id)));
+  return Array.from(byRoot.values()).map((ids) => subgraph(graph, (n) => ids.has(n.id)));
 }
 
 /** A placed set of nodes in local coordinates, plus optional edge routes in the same frame. */

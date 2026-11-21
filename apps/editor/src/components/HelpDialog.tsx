@@ -6,6 +6,8 @@ import { Modal } from './Modal.js';
 
 const DOCS = new URL('../', new URL(import.meta.env.BASE_URL, 'https://x.invalid')).pathname;
 const GITHUB = 'https://github.com/Uncovered-Songs/relvista';
+/** Shipped next to the app by vite.config.ts (THIRD_PARTY_NOTICES.md at the repository root). */
+const NOTICES = `${import.meta.env.BASE_URL}THIRD_PARTY_NOTICES.txt`;
 
 export function HelpDialog(props: { onClose(): void }): ReactElement {
   const mac = detectMac();
@@ -93,9 +95,14 @@ export function HelpDialog(props: { onClose(): void }): ReactElement {
           </a>{' '}
           (MIT)
         </li>
+        <li>
+          <a href={`${DOCS}third-party-notices`}>Licences</a> of the open-source packages in this
+          editor (<a href={NOTICES}>plain text</a>)
+        </li>
       </ul>
       <p className="ed-muted ed-small">
-        <strong>relvista</strong> editor {version}
+        <strong>relvista</strong> editor {version}. relvista is an independent open-source project,
+        not affiliated with Holistics or dbdiagram.io. DBML is an open-source language by Holistics.
       </p>
     </Modal>
   );

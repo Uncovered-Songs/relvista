@@ -3,6 +3,7 @@
 //   static/schemas/layout-1.json   copy of schemas/layout.schema.json (decision 0002)
 //   static/dbml/01-minimal.dbml    copy of examples/01-minimal.dbml (loaded by URL in Usage)
 //   docs/gallery/*.mdx             one page per project in examples/, plus the gallery index
+//   src/pages/third-party-notices.md   the repository's THIRD_PARTY_NOTICES.md as a page
 // Everything written here is git-ignored. Run with --check to fail instead of writing when stale.
 import {
   existsSync,
@@ -48,6 +49,26 @@ write(
 write(
   join(siteDir, 'static', 'dbml', '01-minimal.dbml'),
   readFileSync(join(examplesDir, '01-minimal.dbml'), 'utf8'),
+);
+
+// --- third-party notices (scripts/third-party-notices.mjs) -----------------------------------
+const notices = join(repoRoot, 'THIRD_PARTY_NOTICES.md');
+if (!existsSync(notices)) {
+  console.error('THIRD_PARTY_NOTICES.md is missing: run `pnpm build && pnpm notices` at the root.');
+  process.exit(1);
+}
+write(
+  join(siteDir, 'src', 'pages', 'third-party-notices.md'),
+  [
+    '---',
+    'title: Third-party notices',
+    'description: Licences and copyright notices of the open-source packages in the relvista docs site and editor.',
+    // Licence texts are plain text, never MDX.
+    'format: md',
+    '---',
+    '',
+    readFileSync(notices, 'utf8'),
+  ].join('\n'),
 );
 
 // --- gallery ------------------------------------------------------------------------------------
@@ -280,7 +301,7 @@ write(
     '',
     "import GalleryGrid from '@site/src/components/GalleryGrid';",
     '',
-    "Every file in the repository's [`examples/`](https://github.com/Uncovered-Songs/relvista/tree/main/examples) folder, rendered by the theme exactly as your docs would render it. Each example focuses on one part of DBML; open one to explore the diagram and read its source.",
+    "Every file in the repository's [`examples/`](https://github.com/Uncovered-Songs/relvista/tree/main/examples) folder, rendered by the Docusaurus plugin exactly as your docs would render it. Each example focuses on one part of DBML; open one to explore the diagram and read its source.",
     '',
     `<GalleryGrid items={${JSON.stringify(cards, null, 2)}} />`,
     '',

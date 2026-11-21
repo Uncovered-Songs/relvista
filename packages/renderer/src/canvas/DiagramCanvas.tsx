@@ -2,6 +2,7 @@ import {
   DEFAULT_VIEW,
   mergeViewDefaults,
   selectView,
+  type Box,
   type DetailLevel,
   type DiagramGeometry,
   type DiagramModel,
@@ -42,7 +43,8 @@ import { renderDiagramSvgString } from '../export/svgString.js';
 import { layoutAsync, layoutSync, moveNodes } from '../geometry.js';
 import { ColorContext } from '../svg/context.js';
 import { highlightSets, nodeDetail, routeAll, rowIndexOf, type EdgeStyle } from '../svg/routing.js';
-import { colorResolver, safeColor, type ColorMode } from '../theme.js';
+import { colorResolver, safeColor, type ColorMode, type PaletteOverrides } from '../theme.js';
+import { resolvePalette } from '../themeDom.js';
 import { ViewerContext, handleId, type ViewerState } from '../viewer/context.js';
 import { fitViewport, initialViewport, type Padding } from '../viewer/initialView.js';
 import { nodeTypes, type FlowNode, type GroupFlowNode } from '../viewer/nodes.js';
@@ -208,11 +210,34 @@ export const FIT_FLOOR_SMALL = 0.45;
 /** Fit floor of narrow canvases (phones). */
 export const FIT_FLOOR_NARROW = 0.5;
 export const SMALL_DIAGRAM_TABLES = 12;
-export const MAX_FIT_ZOOM = 1.25;
+/** Largest zoom of the first view and Fit: a small diagram opens a little above 1:1, centred. */
+export const MAX_FIT_ZOOM = 1.15;
 /** Part of a node that must be on screen for `focusNode(…, { onlyIfHidden })` to leave it. */
 const FOCUS_VISIBLE = 0.6;
 
 const EMPTY_SET: ReadonlySet<string> = new Set();
+
+/**
+ * Whether a restored viewport shows the whole diagram, and at clearly less than the fit's zoom:
+ * nothing the user arranged is lost by framing the diagram for the current canvas instead.
+ */
+export function shrunkenRestore(
+  vp: Viewport,
+  b: Box,
+  size: { width: number; height: number },
+  padding: Padding,
+): boolean {
+  const fit = fitViewport({ bounds: b, ...size, padding, maxZoom: MAX_FIT_ZOOM });
+  if (!fit || fit.zoom <= vp.zoom * 1.05) return false;
+  const x0 = vp.x + b.x * vp.zoom;
+  const y0 = vp.y + b.y * vp.zoom;
+  return (
+    x0 >= -1 &&
+    y0 >= -1 &&
+    x0 + b.width * vp.zoom <= size.width + 1 &&
+    y0 + b.height * vp.zoom <= size.height + 1
+  );
+}
 
 function setOwn<T>(obj: Record<string, T>, key: string, value: T): void {
   Object.defineProperty(obj, key, { value, enumerable: true, writable: true, configurable: true });
@@ -601,7 +626,30 @@ function CanvasInner({
       handles,
     ],
   );
-  const colors = useMemo(() => colorResolver(colorMode), [colorMode]);
+  // The canvas colour the page actually shows (a host palette or custom CSS may replace relvista's):
+  // group colours are adjusted for contrast against it.
+  const [shownBg, setShownBg] = useState<{ mode: ColorMode; palette: PaletteOverrides } | null>(
+    null,
+  );
+  useLayoutEffect(() => {
+    const el = rootRef.current;
+    if (!el) return;
+    const palette = resolvePalette(el, colorMode, ['canvasBg']);
+    setShownBg((prev) =>
+      prev && prev.mode === colorMode && prev.palette.canvasBg === palette.canvasBg
+        ? prev
+        : { mode: colorMode, palette },
+    );
+  }, [colorMode]);
+  const colors = useMemo(
+    () => colorResolver(colorMode, false, shownBg?.mode === colorMode ? shownBg.palette : null),
+    [colorMode, shownBg],
+  );
+  /** What the page shows, for exports in the current mode (another mode uses its palette). */
+  const shownPalette = useCallback((mode: ColorMode): PaletteOverrides | null => {
+    const el = rootRef.current;
+    return el && mode === live.current.colorMode ? resolvePalette(el, mode) : null;
+  }, []);
 
   // --- node events ---------------------------------------------------------------------------
   const live = useRef({
@@ -702,6 +750,14 @@ function CanvasInner({
    * zooms (a gesture, or a zoom / fit / focus command), never for the first view's own moves.
    */
   const [minimapHeld, setMinimapHeld] = useState(false);
+  /**
+   * The viewport was moved by the user (a gesture or a command) or restored from a saved one since
+   * the first view: until then the first view follows the canvas size (see below).
+   */
+  const viewMoved = useRef(false);
+  const onMoveStart = useCallback((event: unknown) => {
+    if (event) viewMoved.current = true;
+  }, []);
   const onMoveEnd = useCallback((event: unknown, vp: Viewport) => {
     if (event) setMinimapHeld(false);
     viewportCb.current?.(vp);
@@ -718,7 +774,7 @@ function CanvasInner({
     const positions: Record<string, Pos> = {};
     for (const [id, p] of moved) setOwn(positions, id, p);
     const next = setNodePositions(L.layout, L.viewName, positions);
-    L.onLayoutChange?.(next, { kind: 'move', view: L.viewName, ids: [...moved.keys()] });
+    L.onLayoutChange?.(next, { kind: 'move', view: L.viewName, ids: Array.from(moved.keys()) });
   }, []);
 
   const nudge = useMemo(
@@ -823,7 +879,7 @@ function CanvasInner({
       // Only on the diagram itself (not in the side card, toolbars or form fields).
       if (!el.closest?.('.react-flow') || el.closest('input, select, textarea, button')) return;
       const movable = new Set(nodesRef.current.map((n) => n.id));
-      let ids = [...selectionRef.current].filter((id) => movable.has(id));
+      let ids = Array.from(selectionRef.current).filter((id) => movable.has(id));
       if (!ids.length) {
         const focused = nodeIdOf(el);
         if (focused && movable.has(focused)) ids = [focused];
@@ -992,7 +1048,13 @@ function CanvasInner({
     if (st.stage === 'done' || !geometry || Object.keys(geometry.nodes).length === 0) return;
     const g = geometry;
     const final = layoutFinal;
-    const own = ownViewport && initialVpFor.current?.key !== resetKey ? ownViewport : undefined;
+    let own = ownViewport && initialVpFor.current?.key !== resetKey ? ownViewport : undefined;
+    // A restored session viewport that shows the whole diagram smaller than the fit would (saved in
+    // a smaller window or pane) is not worth keeping: the first view frames it for this canvas.
+    if (own && !saved?.viewport && shrunkenRestore(own, g.bounds, canvasSize(), basePadding)) {
+      initialVpFor.current = { key: resetKey };
+      own = undefined;
+    }
     const savedViewport = own ?? saved?.viewport;
     // Deferred a tick so React Flow has the new nodes; the stage only advances once applied.
     const t = setTimeout(() => {
@@ -1000,6 +1062,7 @@ function CanvasInner({
       if (st.stage === 'pending') {
         if (own) initialVpFor.current = { key: resetKey };
         savedApplied.current = !!savedViewport;
+        viewMoved.current = !!savedViewport;
         if (savedViewport) {
           setMinimapHeld(false);
           void rf.setViewport(savedViewport);
@@ -1015,6 +1078,23 @@ function CanvasInner({
     return () => clearTimeout(t);
     // Only a new geometry or document/view drives this; see above.
   }, [geometry, layoutFinal, stageKey]);
+
+  // Until the user moves it, the first view follows the canvas size: a pane resized right after
+  // opening (a restored splitter, a window snapped to half the screen, a viewer that shrinks to
+  // its diagram on a phone) shows the diagram framed for its real size, not tiny and off-centre.
+  const framedSize = useRef<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    if (!size) return;
+    const prev = framedSize.current;
+    framedSize.current = size;
+    const g = live.current.current;
+    if (!prev || viewMoved.current || viewStage.current.stage === 'pending' || !g) return;
+    if (Math.abs(prev.width - size.width) < 2 && Math.abs(prev.height - size.height) < 2) return;
+    const raf = requestAnimationFrame(() => {
+      if (!viewMoved.current) initialView(g, 0);
+    });
+    return () => cancelAnimationFrame(raf);
+  }, [size]);
 
   // --- status, geometry, placement ------------------------------------------------------------
   const statusRef = useRef(onLayoutStatus);
@@ -1051,12 +1131,17 @@ function CanvasInner({
   useImperativeHandle(
     ref ?? handleRef,
     (): DiagramCanvasHandle => ({
-      fitView: (o) => live.current.fit(o?.duration ?? 250),
+      fitView: (o) => {
+        viewMoved.current = true;
+        live.current.fit(o?.duration ?? 250);
+      },
       zoomIn() {
+        viewMoved.current = true;
         setMinimapHeld(false);
         void rf.zoomIn({ duration: 150 });
       },
       zoomOut() {
+        viewMoved.current = true;
         setMinimapHeld(false);
         void rf.zoomOut({ duration: 150 });
       },
@@ -1075,6 +1160,7 @@ function CanvasInner({
           const iy = Math.max(0, Math.min(s.height, y0 + h) - Math.max(0, y0));
           if (w * h > 0 && (ix * iy) / (w * h) >= FOCUS_VISIBLE) return;
         }
+        viewMoved.current = true;
         setMinimapHeld(false);
         void rf.setCenter(n.x + n.width / 2, n.y + n.height / 2, {
           zoom: vp.zoom,
@@ -1155,34 +1241,40 @@ function CanvasInner({
       },
       getSelection() {
         const visible = new Set(nodesRef.current.map((n) => n.id));
-        return [...selectionRef.current].filter((id) => visible.has(id));
+        return Array.from(selectionRef.current).filter((id) => visible.has(id));
       },
       // The state setter of the same name (a method does not shadow it).
       setSelection: (ids) => setSelection(ids.length ? new Set(ids) : EMPTY_SET),
       getGeometry: () => live.current.current,
       getViewport: () => rf.getViewport(),
       setViewport(vp, o) {
+        viewMoved.current = true;
         setMinimapHeld(false);
         void rf.setViewport(vp, o?.duration ? { duration: o.duration } : undefined);
       },
       exportSvg(o) {
         const L = live.current;
         if (!L.viewModel || !L.current) return null;
+        const colorMode = o?.colorMode ?? L.colorMode;
         return renderDiagramSvgString(L.viewModel, L.current, {
           detailLevel: L.detail,
           edgeStyle: L.edges_,
-          colorMode: o?.colorMode ?? L.colorMode,
+          colorMode,
+          palette: shownPalette(colorMode),
           ...(o?.title ? { title: o.title } : {}),
         });
       },
       async exportPng(o) {
         const L = live.current;
         if (!L.viewModel || !L.current) return null;
+        const colorMode = o?.colorMode ?? L.colorMode;
+        const palette = shownPalette(colorMode);
         const { exportPng } = await import('../export/png.js');
         return exportPng(L.viewModel, L.current, {
           detailLevel: L.detail,
           edgeStyle: L.edges_,
-          colorMode: o?.colorMode ?? L.colorMode,
+          colorMode,
+          palette,
           scale: o?.scale ?? 2,
           ...(o?.title ? { title: o.title } : {}),
         });
@@ -1192,18 +1284,21 @@ function CanvasInner({
         const vm = L.viewModel;
         const g = L.current;
         if (!vm || !g) return;
+        // Prints are light: the page's colours when it shows light mode.
+        const palette = shownPalette('light');
         import('../export/print.js')
           .then(({ printDiagram }) =>
             printDiagram(vm, g, {
               detailLevel: L.detail,
               edgeStyle: L.edges_,
+              palette,
               ...(o?.title ? { title: o.title } : {}),
             }),
           )
           .catch((err: unknown) => console.error('relvista: print failed', err));
       },
     }),
-    [rf, canvasSize],
+    [rf, canvasSize, shownPalette],
   );
 
   return (
@@ -1236,6 +1331,7 @@ function CanvasInner({
             onNodeDrag={onDrag}
             onNodeDragStop={onDragStop}
             onPaneClick={onPane}
+            onMoveStart={onMoveStart}
             onMoveEnd={onMoveEnd}
             nodesDraggable={nodeDrag}
             nodesConnectable={false}

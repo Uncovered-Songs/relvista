@@ -13,8 +13,8 @@ const FEATURES: Array<{ title: string; body: ReactNode }> = [
     title: 'Plain DBML',
     body: (
       <>
-        The same language as dbdiagram.io, parsed by the official <code>@dbml/parse</code>. Files
-        open there and here unchanged.
+        The same language as dbdiagram.io, parsed by <code>@dbml/parse</code>, Holistics&apos;
+        open-source DBML parser. Files open there and here unchanged.
       </>
     ),
   },
@@ -130,7 +130,7 @@ export default function Home(): ReactNode {
               </Link>
             </div>
             <div className={styles.install}>
-              <code>npm i @relvista/docusaurus-theme</code>
+              <code>npm i @relvista/docusaurus-plugin</code>
             </div>
           </div>
           <div className={styles.heroDiagram}>

@@ -4,7 +4,7 @@ Authoritative for phase 2. Two builders work in parallel:
 
 | Builder | Owns (may edit)                                                                                                                                               | Must not edit                 |
 | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------- |
-| **A**   | `packages/renderer/**` (src, test, styles), `packages/docusaurus-theme/src/{defaults,options}.ts` + its tests                                                 | `apps/**`, `packages/core/**` |
+| **A**   | `packages/renderer/**` (src, test, styles), `packages/docusaurus-plugin/src/{defaults,options}.ts` + its tests                                                | `apps/**`, `packages/core/**` |
 | **B**   | `apps/editor/**`, `apps/docs/**` (navbar, landing CTA, copy step, docs page), root `package.json` scripts, `.github/workflows/*.yml`, `README.md` status line | `packages/**`                 |
 
 Nobody edits `packages/core/**`, `examples/**`, `schemas/**` or adds dependencies: everything
@@ -396,7 +396,7 @@ export function inflateFromBase64Url(b64u: string): Promise<string>; // throws o
 `DbmlViewer` "Open in editor": `createEditorLink(editorUrl, { dbml: entrySource(source), layout,
 view: viewName === '*' ? null : viewName })` in an effect; the button renders once the href
 exists (and is hidden for multi-file sources, as today). `DbmlViewer` keeps no default
-`editorUrl` (read-only behaviour unchanged); the Docusaurus theme defaults to
+`editorUrl` (read-only behaviour unchanged); the Docusaurus plugin defaults to
 `DEFAULT_EDITOR_URL` (§3.6).
 
 ### 3.5 Styles
@@ -410,7 +410,7 @@ dragging), `[data-rv-editable='true'] .react-flow__node { cursor: grab }`, and a
 `.rv-viewer` but belong to the canvas move to `.rv-canvas` (the viewer contains a canvas, so
 existing docs pages look identical).
 
-### 3.6 Docusaurus theme (builder A)
+### 3.6 Docusaurus plugin (builder A)
 
 - `defaults.ts`: `editorUrl` defaults to `DEFAULT_EDITOR_URL` (import from `@relvista/renderer`);
   `editorUrl: false` hides the button. Type: `editorUrl?: string | false`.
@@ -890,7 +890,7 @@ reserve it).
 
 - `docusaurus.config.ts` navbar: `{ to: 'pathname:///editor/', label: 'Editor', position: 'left' }`
   (rendered href must be exactly `/relvista/editor/`; docs e2e asserts it). `themeConfig.dbml.
-editorUrl: '/relvista/editor/'` so local builds link to the local copy (the theme default is
+editorUrl: '/relvista/editor/'` so local builds link to the local copy (the plugin default is
   the deployed URL).
 - Landing page hero: primary CTA **Open the editor** (`pathname:///editor/`), secondary
   **Get started**; under the fence demo a link "Edit this example in the editor" built with
@@ -898,7 +898,7 @@ editorUrl: '/relvista/editor/'` so local builds link to the local copy (the them
 - New docs page `docs/editor.md` (sidebar after Getting started): what the editor does, files and
   the sidecar, why "Open folder" is best, saving guarantees (byte-exact), share links, shortcuts,
   browser support table (FSA vs download fallback).
-- Gallery pages already get "Open in editor" through the theme default.
+- Gallery pages already get "Open in editor" through the plugin default.
 - `README.md` status line: phase 2.
 
 ---
@@ -1006,7 +1006,7 @@ pnpm --filter relvista-editor dev"`, `"test:e2e:editor"` (above).
   (Pages semantics: folders get a trailing slash, `x` → `x.html`, `404.html`), so
   `pnpm test:e2e:editor` needs `pnpm docs:build` first and also covers docs → editor links
   (`site.spec.ts`). `RELVISTA_EDITOR_E2E_SERVER=preview` keeps the `vite preview` mode.
-  `copy-editor.mjs` leaves source maps out of the artifact. The theme repeats
+  `copy-editor.mjs` leaves source maps out of the artifact. The plugin repeats
   `DEFAULT_EDITOR_URL` in `defaults.ts` (a test keeps it equal to the renderer's) so config
   validation in Node never loads the renderer, and the renderer's `exports` gained a `default`
   condition because Docusaurus' server bundle resolves `import()` with `require` conditions.

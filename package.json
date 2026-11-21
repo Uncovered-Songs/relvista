@@ -14,14 +14,18 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "validate:examples": "node scripts/validate-examples.mjs",
+    "notices": "node scripts/third-party-notices.mjs",
+    "notices:check": "node scripts/third-party-notices.mjs --check",
     "changeset": "changeset",
     "docs:build": "pnpm --filter relvista-docs... build",
     "docs:start": "pnpm --filter \"relvista-docs^...\" build && pnpm --filter relvista-docs start",
     "editor:dev": "pnpm --filter \"relvista-editor^...\" build && pnpm --filter relvista-editor dev",
     "editor:build": "pnpm --filter relvista-editor... build",
-    "test:e2e": "pnpm test:e2e:docs && pnpm test:e2e:editor",
+    "test:e2e": "pnpm test:e2e:docs && pnpm test:e2e:editor && pnpm test:e2e:compat",
     "test:e2e:docs": "pnpm --filter relvista-docs test:e2e",
-    "test:e2e:editor": "pnpm --filter relvista-editor test:e2e"
+    "test:e2e:editor": "pnpm --filter relvista-editor test:e2e",
+    "test:e2e:compat": "pnpm --filter relvista-docs-compat test:e2e",
+    "compat:build": "pnpm --filter relvista-docs-compat... build"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",

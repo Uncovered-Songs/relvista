@@ -1,5 +1,6 @@
 /** React wrapper: one editor instance, one model per file, view state per file. */
 import { useEffect, useRef, type ReactElement } from 'react';
+import { useNarrow } from '../components/useNarrow.js';
 import { onCursorMoved, showFile } from '../diagram/sync.js';
 import { store, useEditor } from '../state/store.js';
 import { useTheme } from '../theme.js';
@@ -9,12 +10,39 @@ import { MONACO_THEME } from './themes.js';
 
 const MONO = "ui-monospace, 'SF Mono', Menlo, Consolas, monospace";
 
+/**
+ * Phones (< 768 px, see useNarrow): long lines wrap (view only; the text never changes) and the
+ * gutter shrinks to the line numbers, so code gets the width. Wider screens keep Monaco's gutter.
+ */
+function widthOptions(narrow: boolean): monaco.editor.IEditorOptions {
+  return narrow
+    ? {
+        wordWrap: 'on',
+        wrappingIndent: 'same',
+        glyphMargin: false,
+        folding: false,
+        lineNumbersMinChars: 2,
+        lineDecorationsWidth: 6,
+        stickyScroll: { enabled: false },
+      }
+    : {
+        wordWrap: 'off',
+        glyphMargin: true,
+        folding: true,
+        lineNumbersMinChars: 5,
+        lineDecorationsWidth: 10,
+        stickyScroll: { enabled: true },
+      };
+}
+
 export function MonacoEditor(): ReactElement {
   const host = useRef<HTMLDivElement>(null);
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
   const wsId = useEditor((s) => s.ws.id);
   const activeFile = useEditor((s) => s.activeFile);
   const { mode } = useTheme();
+  const narrow = useNarrow();
+  const narrowAtCreate = useRef(narrow);
 
   useEffect(() => {
     const ed = monaco.editor.create(host.current!, {
@@ -37,7 +65,6 @@ export function MonacoEditor(): ReactElement {
       suggest: { showIcons: false, showStatusBar: false },
       suggestFontSize: 12.5,
       suggestLineHeight: 22,
-      stickyScroll: { enabled: true },
       bracketPairColorization: { enabled: true },
       scrollBeyondLastLine: false,
       fixedOverflowWidgets: true,
@@ -45,6 +72,7 @@ export function MonacoEditor(): ReactElement {
       renderWhitespace: 'selection',
       ariaLabel: 'DBML source',
       'semanticHighlighting.enabled': false,
+      ...widthOptions(narrowAtCreate.current),
     });
     editorRef.current = ed;
     store.editor = ed;
@@ -69,6 +97,10 @@ export function MonacoEditor(): ReactElement {
   useEffect(() => {
     monaco.editor.setTheme(MONACO_THEME[mode]);
   }, [mode]);
+
+  useEffect(() => {
+    editorRef.current?.updateOptions(widthOptions(narrow));
+  }, [narrow]);
 
   // New document (models were recreated) or another file tab.
   useEffect(() => {

@@ -3,8 +3,10 @@ import {
   RemoteError,
   fetchBytes,
   normalizeRemoteUrl,
+  readLayoutParam,
   readUrlParam,
   remoteFileName,
+  remoteLayoutUrl,
   sidecarUrl,
 } from '../src/files/remote.js';
 
@@ -49,6 +51,35 @@ describe('sidecarUrl', () => {
     );
     expect(sidecarUrl('https://x.dev/schema.dbml?token=abc&raw=1#frag')).toBe(
       'https://x.dev/schema.dbml.layout.json?token=abc&raw=1',
+    );
+  });
+});
+
+describe('layout of a remote file', () => {
+  it('asks for none unless &layout is given', () => {
+    expect(readLayoutParam('?url=https%3A%2F%2Fx.dev%2Fa.dbml')).toEqual({ kind: 'none' });
+    for (const q of ['?url=x&layout', '?url=x&layout=', '?layout=auto', '?layout=1']) {
+      expect(readLayoutParam(q), q).toEqual({ kind: 'auto' });
+    }
+    expect(readLayoutParam('?layout=https%3A%2F%2Fx.dev%2Fl.json')).toEqual({
+      kind: 'url',
+      url: 'https://x.dev/l.json',
+    });
+  });
+  it('resolves the URL to fetch', () => {
+    const file = 'https://x.dev/db/schema.dbml';
+    expect(remoteLayoutUrl(file, { kind: 'none' })).toBeNull();
+    expect(remoteLayoutUrl(file, { kind: 'auto' })).toBe(
+      'https://x.dev/db/schema.dbml.layout.json',
+    );
+    expect(remoteLayoutUrl(file, { kind: 'url', url: 'layouts/s.json' })).toBe(
+      'https://x.dev/db/layouts/s.json',
+    );
+    expect(
+      remoteLayoutUrl(file, { kind: 'url', url: 'https://github.com/o/r/blob/main/s.json' }),
+    ).toBe('https://raw.githubusercontent.com/o/r/main/s.json');
+    expect(() => remoteLayoutUrl(file, { kind: 'url', url: 'http://evil.example/l.json' })).toThrow(
+      RemoteError,
     );
   });
 });

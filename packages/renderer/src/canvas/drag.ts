@@ -128,7 +128,7 @@ export class NudgeBatch {
     if (this.timer !== null) this.timers.clearTimeout(this.timer);
     this.timer = null;
     if (!this.ids.size) return;
-    const ids = [...this.ids];
+    const ids = Array.from(this.ids);
     this.ids.clear();
     this.commit(ids);
   }

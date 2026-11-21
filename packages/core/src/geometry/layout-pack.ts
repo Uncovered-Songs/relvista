@@ -81,7 +81,7 @@ export function packBlocks(
   }
   let best: ReturnType<typeof shelf> | null = null;
   let bestScore = Infinity;
-  for (const w of [...candidates].sort((a, b) => a - b)) {
+  for (const w of Array.from(candidates).sort((a, b) => a - b)) {
     const s = shelf(blocks, gap, w);
     // Size of the viewport (of the target shape) needed to show the packing at zoom 1.
     const score = Math.max(s.width / ratio, s.height);

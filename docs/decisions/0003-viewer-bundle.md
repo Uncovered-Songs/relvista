@@ -31,7 +31,7 @@ captured with Playwright. Gzip sizes are `gzip -9` of the emitted files.
 - Keep React Flow for the viewer (decision 0001). The bytes are dominated by ELK and the official
   DBML parser, which an own SVG + d3-zoom viewer would also need; React Flow itself is a minor part
   of the 258 KB chunk.
-- Run ELK in a Web Worker on docs sites. The theme emits `elkjs/lib/elk-worker.min.js` as an asset
+- Run ELK in a Web Worker on docs sites. The Docusaurus plugin emits `elkjs/lib/elk-worker.min.js` as an asset
   (webpack rule for `?relvista-worker`) and passes its URL to `DbmlViewer` (`workerUrl`). The worker
   script downloads in parallel and never blocks the main thread; the in-process `elk.bundled.js`
   chunk loads only as a fallback (no `Worker`, or the worker fails).

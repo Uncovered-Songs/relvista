@@ -9,7 +9,7 @@ export function truncate(
 ): string {
   if (maxWidth <= 0) return '';
   if (measure(text, role) <= maxWidth) return text;
-  const chars = [...text];
+  const chars = Array.from(text);
   let lo = 0;
   let hi = chars.length;
   while (lo < hi) {

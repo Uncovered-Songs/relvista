@@ -2,6 +2,7 @@ import type { Config } from '@docusaurus/types';
 import type * as Preset from '@docusaurus/preset-classic';
 import npm2yarn from '@docusaurus/remark-plugin-npm2yarn';
 import { themes as prismThemes } from 'prism-react-renderer';
+import thirdPartyModules from './plugins/third-party-modules';
 
 const repoUrl = 'https://github.com/Uncovered-Songs/relvista';
 
@@ -39,7 +40,9 @@ const config: Config = {
     ],
   ],
 
-  themes: ['@relvista/docusaurus-theme'],
+  // relvista only adds diagrams: the classic theme (and this site's custom.css) keeps all styling.
+  // third-party-modules records what the client bundle ships, for THIRD_PARTY_NOTICES.md.
+  plugins: ['@relvista/docusaurus-plugin', thirdPartyModules],
 
   themeConfig: {
     colorMode: { respectPrefersColorScheme: true },
@@ -74,10 +77,12 @@ const config: Config = {
             { label: 'GitHub', href: repoUrl },
             { label: 'Issues', href: `${repoUrl}/issues` },
             { label: 'DBML language', href: 'https://dbml.dbdiagram.io/docs/' },
+            { label: 'Licences', to: '/third-party-notices' },
           ],
         },
       ],
-      copyright: `relvista is MIT licensed. DBML is an open language by Holistics.`,
+      copyright:
+        'relvista is MIT licensed. relvista is an independent open-source project, not affiliated with Holistics or dbdiagram.io. DBML is an open-source language by Holistics.',
     },
     prism: {
       theme: prismThemes.github,
@@ -86,7 +91,7 @@ const config: Config = {
     },
     dbml: {
       height: 480,
-      // Local builds link to their own copy of the editor (the theme default is the hosted one).
+      // Local builds link to their own copy of the editor (the plugin default is the hosted one).
       editorUrl: '/relvista/editor/',
     },
   } satisfies Preset.ThemeConfig,

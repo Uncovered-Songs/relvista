@@ -12,7 +12,7 @@ export default defineConfig(
     '**/build/',
     '**/.docusaurus/',
     '**/.turbo/',
-    'packages/docusaurus-theme/lib/',
+    'packages/docusaurus-plugin/lib/',
     'apps/docs/test-results/',
     'apps/docs/playwright-report/',
   ]),

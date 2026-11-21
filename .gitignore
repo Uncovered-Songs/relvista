@@ -7,10 +7,11 @@ coverage/
 .docusaurus/
 build/
 # generated
-packages/docusaurus-theme/lib/
+packages/docusaurus-plugin/lib/
 apps/docs/docs/gallery/
 apps/docs/static/schemas/
 apps/docs/static/dbml/
+apps/docs/src/pages/third-party-notices.md
 apps/docs/test-results/
 apps/docs/playwright-report/
 apps/editor/test-results/

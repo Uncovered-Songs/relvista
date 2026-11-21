@@ -1,0 +1,47 @@
+/*
+ * A site with a look of its own: raspberry primary, serif body text, a typewriter monospace, a
+ * purple navbar and square code blocks. relvista must not change any of it (see e2e/compat.spec.ts).
+ */
+:root {
+  --ifm-color-primary: #b4235a;
+  --ifm-color-primary-dark: #a22051;
+  --ifm-color-primary-darker: #991e4d;
+  --ifm-color-primary-darkest: #7e193f;
+  --ifm-color-primary-light: #c62663;
+  --ifm-color-primary-lighter: #cf2968;
+  --ifm-color-primary-lightest: #db4580;
+  --ifm-font-family-base: Georgia, 'Times New Roman', Times, serif;
+  --ifm-font-family-monospace: 'Courier New', Courier, monospace;
+  --ifm-heading-font-family: 'Trebuchet MS', Verdana, sans-serif;
+  --ifm-navbar-background-color: #3b1f5c;
+  --ifm-navbar-link-color: #f6e7ff;
+  --ifm-code-border-radius: 0;
+  --ifm-background-color: #fffaf3;
+  --ifm-background-surface-color: #fff3e3;
+}
+
+/* `html[…]`: Infima's own dark block is `html[data-theme='dark']` and would win otherwise. */
+html[data-theme='dark'] {
+  --ifm-color-primary: #ff7aa8;
+  --ifm-color-primary-dark: #ff5c93;
+  --ifm-color-primary-darker: #ff4d89;
+  --ifm-color-primary-darkest: #ff1f6a;
+  --ifm-color-primary-light: #ff98bd;
+  --ifm-color-primary-lighter: #ffa7c7;
+  --ifm-color-primary-lightest: #ffd3e3;
+  --ifm-background-color: #17111f;
+  --ifm-background-surface-color: #221a2e;
+  --ifm-navbar-background-color: #241338;
+}
+
+.navbar__title {
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* The site's own CodeBlock wrapper (src/theme/CodeBlock) draws a coloured rule. */
+.compat-codeblock {
+  border-left: 4px solid var(--ifm-color-primary);
+  padding-left: 0.5rem;
+  margin-bottom: var(--ifm-leading);
+}

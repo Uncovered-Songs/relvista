@@ -6,7 +6,7 @@ import {
   type TextMeasure,
 } from '@relvista/core';
 import { useMemo, type CSSProperties, type ReactElement } from 'react';
-import { colorResolver, type ColorMode } from '../theme.js';
+import { colorResolver, type ColorMode, type PaletteOverrides } from '../theme.js';
 import { ColorContext, useColors } from './context.js';
 import { GroupSvg } from './GroupSvg.js';
 import { NoteSvg } from './NoteSvg.js';
@@ -38,6 +38,11 @@ export interface DiagramSvgProps {
   idPrefix?: string;
   /** Write literal colours instead of `var(--rv-*)` (standalone export). */
   literalColors?: boolean;
+  /**
+   * Colours and fonts replacing the `colorMode` palette's (the literal values, and the fallbacks
+   * of the `var(--rv-*)` references), such as what a page shows (`resolvePalette`).
+   */
+  palette?: PaletteOverrides | null;
   /** Draw a card shadow (default true). */
   shadows?: boolean;
   measure?: TextMeasure;
@@ -46,8 +51,8 @@ export interface DiagramSvgProps {
 /** The whole diagram as pure, SSR-safe SVG (no browser APIs). */
 export function DiagramSvg(props: DiagramSvgProps): ReactElement {
   const colors = useMemo(
-    () => colorResolver(props.colorMode ?? 'light', props.literalColors ?? false),
-    [props.colorMode, props.literalColors],
+    () => colorResolver(props.colorMode ?? 'light', props.literalColors ?? false, props.palette),
+    [props.colorMode, props.literalColors, props.palette],
   );
   return (
     <ColorContext.Provider value={colors}>

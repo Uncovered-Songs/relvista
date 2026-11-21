@@ -291,8 +291,8 @@ export function pruneLayout(
   });
   return {
     layout: next,
-    removed: [...removed].sort(compareKeys),
-    removedEdges: [...removedEdges].sort(compareKeys),
+    removed: Array.from(removed).sort(compareKeys),
+    removedEdges: Array.from(removedEdges).sort(compareKeys),
   };
 }
 

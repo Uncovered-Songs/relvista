@@ -1,13 +1,47 @@
+import { existsSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
-import { defineConfig } from 'vite';
+import { defineConfig, type Plugin } from 'vite';
+import { writePackageList } from '../../scripts/third-party/collect.mjs';
 
 const repoRoot = fileURLToPath(new URL('../..', import.meta.url));
+const notices = fileURLToPath(new URL('../../THIRD_PARTY_NOTICES.md', import.meta.url));
+
+// Every npm package in this build (main bundle and worker bundles alike), recorded for
+// scripts/third-party-notices.mjs. The workers are separate Rollup builds in the same process.
+const bundled = new Set<string>();
+function thirdParty(options: { main: boolean }): Plugin {
+  return {
+    name: 'relvista:third-party',
+    apply: 'build',
+    generateBundle(_output, bundle) {
+      for (const item of Object.values(bundle)) {
+        if (item.type !== 'chunk') continue;
+        for (const [id, info] of Object.entries(item.modules)) {
+          // CSS leaves the JS chunk (renderedLength 0) but still ships, in the .css asset.
+          if (info.renderedLength > 0 || /\.css($|\?)/.test(id)) bundled.add(id);
+        }
+      }
+      writePackageList('editor', bundled);
+      // The notices ship next to the app: /relvista/editor/THIRD_PARTY_NOTICES.txt.
+      if (options.main && existsSync(notices)) {
+        this.emitFile({
+          type: 'asset',
+          fileName: 'THIRD_PARTY_NOTICES.txt',
+          source: readFileSync(notices, 'utf8'),
+        });
+      }
+    },
+  };
+}
 
 // Served at https://uncovered-songs.github.io/relvista/editor/ (copied into the docs build).
 export default defineConfig({
   base: process.env.RELVISTA_EDITOR_BASE ?? '/relvista/editor/',
-  plugins: [react()],
+  plugins: [react(), thirdParty({ main: true })],
+  // Licence comments (`/*! … */`, `@license`, `@preserve`) survive minification, at the end of
+  // each chunk; full texts are in THIRD_PARTY_NOTICES.txt.
+  esbuild: { legalComments: 'eof' },
   worker: {
     format: 'es',
     // No source maps for worker bundles: the SQL worker inlines @dbml/core (15 MB, every SQL
@@ -18,6 +52,7 @@ export default defineConfig({
         name: 'relvista:no-worker-sourcemaps',
         outputOptions: (options) => ({ ...options, sourcemap: false }),
       },
+      thirdParty({ main: false }),
     ],
   },
   build: {

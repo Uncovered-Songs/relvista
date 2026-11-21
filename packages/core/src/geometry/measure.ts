@@ -114,7 +114,7 @@ export function wrapNoteText(
 /** Splits `word` into pieces that each fit `maxWidth` (the word itself when it fits). */
 function breakWord(word: string, measure: TextMeasure, maxWidth: number): string[] {
   if (measure(word, 'noteText') <= maxWidth) return [word];
-  const chars = [...word];
+  const chars = Array.from(word);
   const out: string[] = [];
   let start = 0;
   while (start < chars.length) {

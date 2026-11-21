@@ -109,7 +109,7 @@ export function shortcutRows(mac: boolean): ShortcutRow[] {
   const j = (...k: string[]) => k.join(mac ? '' : '+');
   return [
     { keys: j(mod, 'S'), action: 'Save', where: 'Everywhere' },
-    { keys: j(mod, shift, 'S'), action: 'Save as', where: 'Everywhere' },
+    { keys: j(mod, shift, 'S'), action: 'Save as (a folder: Save folder as)', where: 'Everywhere' },
     { keys: j(mod, 'O'), action: 'Open file', where: 'Everywhere' },
     {
       keys: `${j(mod, 'Z')} / ${j(mod, shift, 'Z')}`,

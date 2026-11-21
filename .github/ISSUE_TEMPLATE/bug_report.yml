@@ -12,7 +12,7 @@ body:
       label: Area
       options:
         - Editor website
-        - Docusaurus theme
+        - Docusaurus plugin
         - '@relvista/core'
         - '@relvista/renderer'
         - Other
@@ -47,7 +47,7 @@ body:
     id: version
     attributes:
       label: relvista version
-      placeholder: e.g. @relvista/docusaurus-theme 0.1.0, or editor build date
+      placeholder: e.g. @relvista/docusaurus-plugin 0.1.0, or editor build date
   - type: input
     id: environment
     attributes:

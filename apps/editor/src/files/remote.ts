@@ -115,3 +115,36 @@ export function readUrlParam(search: string): string | null {
   const v = new URLSearchParams(search).get('url');
   return v && v.trim() ? v.trim() : null;
 }
+
+/**
+ * Where a remote file's layout comes from. Probing for a sidecar that does not exist costs a
+ * request that the browser logs as a 404 in the console (no fetch option hides it), so the
+ * editor only asks for one when told to:
+ * - `none`: no request (plain `?url=`);
+ * - `auto`: `<url>.layout.json` next to the file (`&layout`, `&layout=auto`, the dialog's checkbox);
+ *   a missing file is not an error;
+ * - `url`: an explicit layout URL (`&layout=<url>`, relative to the .dbml URL).
+ */
+export type RemoteLayout = { kind: 'none' } | { kind: 'auto' } | { kind: 'url'; url: string };
+
+/** Reads `&layout=` next to `?url=`. */
+export function readLayoutParam(search: string): RemoteLayout {
+  const params = new URLSearchParams(search);
+  if (!params.has('layout')) return { kind: 'none' };
+  const v = params.get('layout')!.trim();
+  if (v === '' || v === 'auto' || v === '1' || v === 'true') return { kind: 'auto' };
+  return { kind: 'url', url: v };
+}
+
+/** The layout URL to fetch for a remote file, or null for none. Throws RemoteError. */
+export function remoteLayoutUrl(fileUrl: string, layout: RemoteLayout): string | null {
+  if (layout.kind === 'none') return null;
+  if (layout.kind === 'auto') return sidecarUrl(fileUrl);
+  let resolved: string;
+  try {
+    resolved = new URL(layout.url, fileUrl).toString();
+  } catch {
+    throw new RemoteError('The layout URL is not valid.', layout.url);
+  }
+  return normalizeRemoteUrl(resolved);
+}

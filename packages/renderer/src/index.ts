@@ -10,11 +10,20 @@ export {
   cssVarName,
   paletteCss,
   colorResolver,
+  parseHex,
+  toHex,
+  contrastRatio,
+  withContrast,
+  groupColors,
+  mix,
   type ColorMode,
   type ColorResolver,
   type Palette,
   type PaletteKey,
+  type PaletteOverrides,
+  type Rgb,
 } from './theme.js';
+export { resolveColors, resolvePalette, normalizeComputedColor } from './themeDom.js';
 export {
   layoutSync,
   layoutAsync,

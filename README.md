@@ -6,8 +6,9 @@ dbdiagram.io uses.
 - **[Editor](https://uncovered-songs.github.io/relvista/editor/)** — open a `.dbml` file or folder,
   edit it with a live diagram, arrange tables, save it back byte for byte. Static site, no account,
   no backend.
-- **Docusaurus theme** — render ` ```dbml ` code fences and `.dbml` files in your docs with zoom,
-  pan, fullscreen, print and export.
+- **Docusaurus plugin** — `plugins: ['@relvista/docusaurus-plugin']` renders ` ```dbml ` code fences
+  and `.dbml` files in your docs with zoom, pan, fullscreen, print and export. It only adds
+  diagrams; your site keeps its own theme and styling.
 - **Core libraries** — parser wrapper, diagram model, layout file and renderer, usable in any React app.
 
 > Status: phase 2 (editor). Nothing is published on npm yet.
@@ -30,7 +31,8 @@ Every diagram in the docs has an "Open in editor" button. See the
 ## Principles
 
 - `.dbml` stays 100% compatible with dbdiagram.io: a file valid there opens here unchanged and saves
-  back unchanged apart from what you edit. Parsing uses the official `@dbml/parse`.
+  back unchanged apart from what you edit. Parsing uses `@dbml/parse`, Holistics' open-source DBML
+  parser.
 - Anything DBML cannot express (table positions, per-view layout) lives in a sidecar
   `schema.dbml.layout.json`, versioned by a [JSON Schema](schemas/layout.schema.json).
 - One renderer draws the same picture in the editor, in the docs, and in exports.
@@ -40,11 +42,11 @@ Every diagram in the docs has an "Open in editor" button. See the
 ```text
 apps/
   editor/              Vite SPA: the editor, deployed at /relvista/editor/ (phase 2)
-  docs/                Docusaurus site: project docs + live demo of the theme; its build includes the editor
+  docs/                Docusaurus site: project docs + live demo of the plugin; its build includes the editor
 packages/
   core/                @relvista/core: parse, model, layout file, auto-layout
   renderer/            @relvista/renderer: SVG components, viewer, editable canvas, export, share links
-  docusaurus-theme/    @relvista/docusaurus-theme (phase 1)
+  docusaurus-plugin/   @relvista/docusaurus-plugin: adds DBML diagrams to a Docusaurus site (phase 1)
 examples/              sample .dbml files used by tests and docs
 schemas/               layout.schema.json
 docs/decisions/        decision records
@@ -60,9 +62,9 @@ pnpm typecheck
 pnpm build
 pnpm validate:examples
 pnpm editor:dev       # the editor, http://localhost:5173/relvista/editor/
-pnpm docs:start       # docs site with the theme, http://localhost:3000/relvista/
+pnpm docs:start       # docs site with the plugin, http://localhost:3000/relvista/
 pnpm docs:build       # the whole Pages site: docs + editor in apps/docs/build/
-pnpm test:e2e         # docs + editor e2e, after `pnpm docs:build`;
+pnpm test:e2e         # docs + editor + docs-compat e2e, after `pnpm build`;
                       # needs `pnpm --filter relvista-docs exec playwright install chromium`
 ```
 
@@ -70,8 +72,14 @@ pnpm test:e2e         # docs + editor e2e, after `pnpm docs:build`;
 
 The interactive viewer is built on [React Flow](https://reactflow.dev) by xyflow (MIT); the editor
 uses [Monaco](https://microsoft.github.io/monaco-editor/) (MIT). Auto-layout
-uses [ELK](https://eclipse.dev/elk/) (elkjs, EPL-2.0) and [dagre](https://github.com/dagrejs/dagre);
-DBML parsing uses the official [@dbml/parse](https://github.com/holistics/dbml).
+uses [ELK](https://eclipse.dev/elk/) (elkjs, used under EPL-2.0) and [dagre](https://github.com/dagrejs/dagre);
+DBML parsing uses [@dbml/parse](https://github.com/holistics/dbml) (Apache-2.0).
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md) lists every package bundled into the editor and the
+docs site, with its licence ([on the site](https://uncovered-songs.github.io/relvista/third-party-notices)).
+Regenerate it after dependency changes with `pnpm build && pnpm notices`; CI fails when it is stale.
+
+relvista is an independent open-source project, not affiliated with Holistics or dbdiagram.io.
+DBML is an open-source language by Holistics.
 
 ## License
 

@@ -1,6 +1,6 @@
 # relvista docs
 
-The **relvista** documentation site and live demo of `@relvista/docusaurus-theme`, published at
+The **relvista** documentation site and live demo of `@relvista/docusaurus-plugin`, published at
 <https://uncovered-songs.github.io/relvista/> by `.github/workflows/deploy-docs.yml`.
 
 ```sh

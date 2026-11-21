@@ -19,7 +19,7 @@
     "@docusaurus/remark-plugin-npm2yarn": "3.10.2",
     "@mdx-js/react": "^3.1.1",
     "@relvista/core": "workspace:*",
-    "@relvista/docusaurus-theme": "workspace:*",
+    "@relvista/docusaurus-plugin": "workspace:*",
     "@relvista/renderer": "workspace:*",
     "clsx": "^2.1.1",
     "prism-react-renderer": "^2.4.1",

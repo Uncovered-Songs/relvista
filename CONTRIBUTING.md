@@ -61,7 +61,7 @@ chore(deps): bump @dbml/parse to 12.2.0
 ```
 
 Common types: `feat`, `fix`, `docs`, `refactor`, `test`, `perf`, `build`, `ci`, `chore`. Scopes are
-package or app names (`core`, `renderer`, `docusaurus-theme`, `editor`, `docs`).
+package or app names (`core`, `renderer`, `docusaurus-plugin`, `editor`, `docs`).
 
 ## Changesets
 

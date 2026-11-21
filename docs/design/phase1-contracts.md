@@ -1,6 +1,6 @@
 # Phase 1 contracts
 
-Fixed interfaces so core, renderer and the Docusaurus theme can be built in parallel.
+Fixed interfaces so core, renderer and the Docusaurus plugin can be built in parallel.
 
 ## @relvista/core — geometry (src/geometry/)
 
@@ -80,13 +80,13 @@ printDiagram(model, geometry, opts) : void                    // browser only, h
 - An unknown `view` logs a warning and shows all tables; an empty view says so. "Open in editor" is
   hidden for multi-file sources (the `#dbml=` link carries one file).
 
-## @relvista/docusaurus-theme
+## @relvista/docusaurus-plugin
 
-- Wraps `@theme-init/CodeBlock`: `language-dbml` → `<DbmlDiagram value=… {...meta} />`;
+- Wraps `@theme-init/MDXComponents/Code` (was `@theme-init/CodeBlock`, see 0005 amendment): `language-dbml` → `<DbmlDiagram value=… {...meta} />`;
   meta keys `title`, `height`, `view`, `layout` (JSON path in static/), `source` (show code tab).
 - `@theme/DbmlDiagram` props: `value` | `src`, `layout`, `view`, `height`, `title`. Renders
   `DbmlViewer` inside `BrowserOnly` + error boundary, colour mode from `useColorMode`, and passes
-  the URL of ELK's worker script (emitted by the theme's webpack rule for
+  the URL of ELK's worker script (emitted by the plugin's webpack rule for
   `elkjs/lib/elk-worker.min.js?relvista-worker`) so auto-layout runs off the main thread.
 - `configureWebpack`: `.dbml` → `asset/source`, `?relvista-worker` → `asset/resource`;
   `getPathsToWatch`; `validateThemeConfig` for `themeConfig.dbml`.

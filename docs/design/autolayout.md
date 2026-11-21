@@ -105,7 +105,7 @@ If `Worker` is missing, the worker cannot be created or a worker layout fails, t
 in-process instead (the failed worker is terminated). ELK instances are cached (one in-process, one
 per worker URL); `disposeElkWorkers()` terminates the cached workers.
 
-The Docusaurus theme does this with a webpack rule: `elkjs/lib/elk-worker.min.js?relvista-worker`
+The Docusaurus plugin does this with a webpack rule: `elkjs/lib/elk-worker.min.js?relvista-worker`
 is emitted as an asset and its URL passed as `workerUrl`.
 
 Spacing options are set on every group (compound) node as well as on the root: ELK reads them from

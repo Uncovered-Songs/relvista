@@ -43,8 +43,20 @@ export interface ViewportInput {
 }
 
 /**
- * Viewport showing the whole diagram centred in the padded area, at most `maxZoom`. Null when the
- * viewer or the diagram has no size.
+ * Screen offset (px) of content `size` px long on an axis of `full` px whose padding leaves
+ * `[start, start + avail]` free: centred on the whole axis, so a small diagram sits in the middle
+ * of the viewer rather than low under a tall title band, but never under the padding.
+ */
+export function centredOffset(size: number, full: number, start: number, avail: number): number {
+  const lo = start;
+  const hi = start + avail - size;
+  if (hi <= lo) return start + (avail - size) / 2;
+  return Math.min(hi, Math.max(lo, (full - size) / 2));
+}
+
+/**
+ * Viewport showing the whole diagram, at most `maxZoom`, centred in the viewer (and inside the
+ * padded area). Null when the viewer or the diagram has no size.
  */
 export function fitViewport(input: Omit<ViewportInput, 'nodes'>): Viewport | null {
   const { bounds: b, width, height, padding: p, maxZoom } = input;
@@ -53,8 +65,8 @@ export function fitViewport(input: Omit<ViewportInput, 'nodes'>): Viewport | nul
   if (!(aw > 0) || !(ah > 0) || !(b.width > 0) || !(b.height > 0)) return null;
   const zoom = Math.min(aw / b.width, ah / b.height, maxZoom);
   return {
-    x: p.left + (aw - b.width * zoom) / 2 - b.x * zoom,
-    y: p.top + (ah - b.height * zoom) / 2 - b.y * zoom,
+    x: centredOffset(b.width * zoom, width, p.left, aw) - b.x * zoom,
+    y: centredOffset(b.height * zoom, height, p.top, ah) - b.y * zoom,
     zoom,
   };
 }
@@ -122,8 +134,14 @@ export function initialViewport(
     boxes: readonly { s: number; e: number }[],
     /** Window offsets (world) at which an overlay starts: a box may end just before one. */
     stops: readonly number[],
+    /** The axis on screen: its full length and padding start (px). */
+    axis: { full: number; pad: number },
   ): number[] => {
-    if (size <= avail) return [start - (avail - size) / 2];
+    if (size <= avail) {
+      // The whole diagram fits along this axis: centred in the viewer (see `centredOffset`).
+      const at = centredOffset(size * zoom, axis.full, axis.pad, avail * zoom);
+      return [start - (at - axis.pad) / zoom];
+    }
     const lo = start;
     const hi = start + size - avail;
     const out = new Set<number>([lo, hi]);
@@ -131,7 +149,7 @@ export function initialViewport(
       for (const v of [box.s, box.e - avail, ...stops.map((o) => box.e - o)])
         out.add(Math.min(hi, Math.max(lo, v)));
     }
-    return [...out];
+    return Array.from(out);
   };
   const all = [...nodes, ...groups];
   // Overlays in world units relative to the window's top-left corner.
@@ -147,6 +165,7 @@ export function initialViewport(
     ww,
     all.map((n) => ({ s: n.x, e: n.x + n.width })),
     obs.filter((o) => o.x > 0 && o.x < ww).map((o) => o.x),
+    { full: width, pad: p.left },
   );
   const ys = starts(
     b.y,
@@ -154,6 +173,7 @@ export function initialViewport(
     wh,
     all.map((n) => ({ s: n.y, e: n.y + n.height })),
     obs.filter((o) => o.y > 0 && o.y < wh).map((o) => o.y),
+    { full: height, pad: p.top },
   );
 
   const diag = Math.hypot(b.width, b.height) || 1;

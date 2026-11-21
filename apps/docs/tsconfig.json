@@ -7,7 +7,7 @@
       "node",
       "@docusaurus/module-type-aliases",
       "@docusaurus/theme-classic",
-      "@relvista/docusaurus-theme/client"
+      "@relvista/docusaurus-plugin/client"
     ]
   },
   "include": ["src", "docusaurus.config.ts", "sidebars.ts", "playwright.config.ts", "e2e"],

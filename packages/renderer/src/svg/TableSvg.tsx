@@ -110,7 +110,7 @@ export const TableSvg = memo(function TableSvg({
   shadowFilter,
   measure = estimateTextWidth,
 }: TableSvgProps): ReactElement {
-  const { c } = useColors();
+  const { c, font, mono } = useColors();
   const w = box.width;
   const h = box.height;
   const r = METRICS.cornerRadius;
@@ -156,7 +156,7 @@ export const TableSvg = memo(function TableSvg({
         className="rv-table-name"
         style={{
           fill: headerText,
-          fontFamily: METRICS.fontFamily,
+          fontFamily: font,
           fontSize: fs.tableName,
           fontWeight: METRICS.fontWeight.tableName,
         }}
@@ -229,7 +229,7 @@ export const TableSvg = memo(function TableSvg({
               y={baseline(cy, fs.columnName)}
               style={{
                 fill: c('rowText'),
-                fontFamily: METRICS.fontFamily,
+                fontFamily: font,
                 fontSize: fs.columnName,
                 fontWeight: METRICS.fontWeight.columnName,
               }}
@@ -262,7 +262,7 @@ export const TableSvg = memo(function TableSvg({
                     textAnchor="middle"
                     style={{
                       fill: c('badgeText'),
-                      fontFamily: METRICS.fontFamily,
+                      fontFamily: font,
                       fontSize: B.fontSize,
                       fontWeight: 600,
                       letterSpacing: 0.3,
@@ -279,7 +279,7 @@ export const TableSvg = memo(function TableSvg({
               textAnchor="end"
               style={{
                 fill: c('typeText'),
-                fontFamily: METRICS.monoFontFamily,
+                fontFamily: mono,
                 fontSize: fs.columnType,
                 fontWeight: METRICS.fontWeight.columnType,
               }}

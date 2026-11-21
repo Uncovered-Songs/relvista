@@ -5,12 +5,13 @@ import { Modal } from './Modal.js';
 /** "Open from URL…" */
 export function UrlDialog(props: { initial?: string; onClose(): void }): ReactElement {
   const [url, setUrl] = useState(props.initial ?? '');
+  const [withLayout, setWithLayout] = useState(false);
   const [busy, setBusy] = useState(false);
   const submit = async () => {
     if (!url.trim()) return;
     setBusy(true);
     props.onClose();
-    await store.openUrl(url.trim());
+    await store.openUrl(url.trim(), { kind: withLayout ? 'auto' : 'none' });
     setBusy(false);
   };
   return (
@@ -54,10 +55,19 @@ export function UrlDialog(props: { initial?: string; onClose(): void }): ReactEl
             required
           />
         </label>
+        <label className="ed-check">
+          <input
+            type="checkbox"
+            checked={withLayout}
+            onChange={(e) => setWithLayout(e.target.checked)}
+          />
+          Also load its layout file (<code>&lt;name&gt;.dbml.layout.json</code> next to it)
+        </label>
         <p className="ed-muted ed-small">
-          GitHub file links work as they are. The server must allow cross-origin requests (CORS); a
-          layout file next to it (<code>&lt;name&gt;.dbml.layout.json</code>) is loaded too. Links
-          to the editor with <code>?url=</code> open the same way.
+          GitHub file links work as they are. The server must allow cross-origin requests (CORS).
+          Links to the editor open the same way: <code>?url=&lt;file&gt;</code>, plus{' '}
+          <code>&amp;layout</code> for the layout file next to it or{' '}
+          <code>&amp;layout=&lt;url&gt;</code> for one elsewhere.
         </p>
       </form>
     </Modal>

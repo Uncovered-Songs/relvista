@@ -175,6 +175,9 @@ test('Save as of a folder workspace moves every file to the new folder', async (
   await expect(page.locator('.ed-filename__name')).toHaveText('main.dbml');
   await diagramReady(page);
 
+  // A folder's Save as is named for what it does.
+  await expect(page.getByRole('button', { name: 'Save folder as…', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Save as', exact: true })).toHaveCount(0);
   await page.evaluate(() => (window.__fsMock.nextDirectory = 'elsewhere'));
   await page.keyboard.press('ControlOrMeta+Shift+s');
   const dbml = Object.keys(files).filter((p) => p.endsWith('.dbml'));

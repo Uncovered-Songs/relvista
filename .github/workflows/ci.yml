@@ -45,9 +45,15 @@ jobs:
 
       # Packages type-check and test against each other's built output (dist/, lib/).
       # Also builds the editor (apps/editor) and the docs site (apps/docs), which copies the editor
-      # into build/editor/: the same Pages artifact deploy-docs.yml publishes, used by the e2e below.
+      # into build/editor/: the same Pages artifact deploy-docs.yml publishes, used by the e2e below;
+      # and the docs-compat fixture site, twice (with and without relvista).
       - name: Build
         run: pnpm build
+
+      # The build records every npm package it bundles; the committed notices must list exactly
+      # those (regenerate with `pnpm build && pnpm notices`).
+      - name: Check third-party notices are up to date
+        run: pnpm notices:check
 
       - name: Typecheck
         run: pnpm typecheck
@@ -68,6 +74,11 @@ jobs:
       - name: Phase-2 gate (editor, incl. byte-exact round trip of every example)
         run: pnpm test:e2e:editor
 
+      # apps/docs-compat (built by `pnpm build`, never deployed): relvista next to mermaid, live
+      # code blocks and a site's own CodeBlock wrapper, on a customised Infima theme.
+      - name: Docusaurus coexistence gate (docs-compat)
+        run: pnpm test:e2e:compat
+
       - name: Upload Playwright results
         if: failure()
         uses: actions/upload-artifact@v7
@@ -76,4 +87,5 @@ jobs:
           path: |
             apps/docs/test-results/
             apps/editor/test-results/
+            apps/docs-compat/build/test-results/
           retention-days: 7

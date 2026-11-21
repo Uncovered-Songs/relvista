@@ -49,7 +49,8 @@ import {
   fetchBytes,
   normalizeRemoteUrl,
   remoteFileName,
-  sidecarUrl,
+  remoteLayoutUrl,
+  type RemoteLayout,
 } from '../files/remote.js';
 import {
   isDbmlName,
@@ -827,18 +828,25 @@ export class EditorStore {
     }
   }
 
-  /** `?url=` and "Open from URL…". */
-  async openUrl(input: string): Promise<boolean> {
+  /**
+   * `?url=` and "Open from URL…". The layout file is fetched only when `layout` asks for it
+   * (`&layout`, the dialog's checkbox): see RemoteLayout.
+   */
+  async openUrl(input: string, layout: RemoteLayout = { kind: 'none' }): Promise<boolean> {
     let url: string;
+    let layoutUrl: string | null;
     try {
       url = normalizeRemoteUrl(input);
+      layoutUrl = remoteLayoutUrl(url, layout);
     } catch (e) {
       this.openDialog({ kind: 'remote-error', url: input, message: errorMessage(e) });
       return false;
     }
     try {
       const bytes = (await fetchBytes(url))!;
-      const layoutBytes = await fetchBytes(sidecarUrl(url), { optional: true }).catch(() => null);
+      const layoutBytes = layoutUrl
+        ? await fetchBytes(layoutUrl, { optional: true }).catch(() => null)
+        : null;
       let layoutText: string | null = null;
       if (layoutBytes) {
         try {
@@ -846,6 +854,10 @@ export class EditorStore {
         } catch {
           layoutText = null;
         }
+      }
+      // Asked for by URL and missing: say so. "Next to it" is a guess; silence when it is not there.
+      if (layout.kind === 'url' && layoutText === null) {
+        this.toast('warning', `The layout file could not be loaded (${layoutUrl}).`);
       }
       const name = remoteFileName(url);
       const key = isDbmlName(name) ? name : `${name}.dbml`;
@@ -978,7 +990,7 @@ export class EditorStore {
 
   async init(): Promise<void> {
     await this.startAutosaveLease();
-    const { readUrlParam } = await import('../files/remote.js');
+    const { readLayoutParam, readUrlParam } = await import('../files/remote.js');
     let opened = await this.openShareHash();
     // A share link opened in a tab that already runs the editor changes only the hash.
     window.addEventListener('hashchange', () => {
@@ -987,9 +999,10 @@ export class EditorStore {
 
     const remote = readUrlParam(location.search);
     if (!opened && remote) {
-      opened = await this.openUrl(remote);
+      opened = await this.openUrl(remote, readLayoutParam(location.search));
       const params = new URLSearchParams(location.search);
       params.delete('url');
+      params.delete('layout');
       const q = params.toString();
       window.history.replaceState(null, '', location.pathname + (q ? `?${q}` : '') + location.hash);
     }

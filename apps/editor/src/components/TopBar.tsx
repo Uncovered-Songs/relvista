@@ -66,8 +66,14 @@ function FileName(): ReactElement {
   );
 }
 
+/** Save as of a folder workspace writes the whole folder elsewhere (store.saveFolder). */
+function saveAsLabel(folder: boolean): string {
+  return folder ? 'Save folder as…' : 'Save as…';
+}
+
 function SaveButtons({ withSaveAs }: { withSaveAs: boolean }): ReactElement {
   const dirty = useEditor((s) => store.isDirty(s));
+  const folder = useEditor((s) => s.ws.files.length > 1);
   const saving = useEditor((s) => s.saving);
   const hasHandle = useEditor((s) =>
     s.ws.files.some((f) => f.key === s.ws.entry && f.handle !== null),
@@ -92,9 +98,9 @@ function SaveButtons({ withSaveAs }: { withSaveAs: boolean }): ReactElement {
           className="ed-btn"
           disabled={saving}
           onClick={() => void store.saveAs()}
-          title={`Save as (${mod('S', { shift: true })})`}
+          title={`${saveAsLabel(folder)} (${mod('S', { shift: true })})`}
         >
-          Save as
+          {folder ? 'Save folder as…' : 'Save as'}
         </button>
       )}
     </>
@@ -104,7 +110,7 @@ function SaveButtons({ withSaveAs }: { withSaveAs: boolean }): ReactElement {
 function saveAsItem(): MenuItem {
   return {
     id: 'm-saveas',
-    label: 'Save as…',
+    label: saveAsLabel(store.getState().ws.files.length > 1),
     shortcut: mod('S', { shift: true }),
     disabled: store.getState().saving,
     onSelect: () => void store.saveAs(),

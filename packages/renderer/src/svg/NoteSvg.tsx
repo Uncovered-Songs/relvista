@@ -27,7 +27,7 @@ export const NoteSvg = memo(function NoteSvg({
   shadowFilter,
   measure = estimateTextWidth,
 }: NoteSvgProps): ReactElement {
-  const { c } = useColors();
+  const { c, font } = useColors();
   const user = safeColor(note.color);
   const rgb = parseHex(user);
   const fill = user ?? c('noteBg');
@@ -55,7 +55,7 @@ export const NoteSvg = memo(function NoteSvg({
       <text
         style={{
           fill: text,
-          fontFamily: METRICS.fontFamily,
+          fontFamily: font,
           fontSize: fs,
           fontWeight: METRICS.fontWeight.noteText,
         }}

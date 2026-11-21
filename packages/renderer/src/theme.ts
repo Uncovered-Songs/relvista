@@ -3,6 +3,8 @@
  * the same values (keep both in sync, `test/theme.test.ts` checks it). Inline `var(--rv-x, fallback)`
  * fallbacks come from here, so a bare `<DiagramSvg>` or an exported SVG looks right without the CSS.
  */
+import { METRICS } from '@relvista/core';
+
 export type ColorMode = 'light' | 'dark';
 
 export interface Palette {
@@ -91,10 +93,22 @@ export function cssVarName(key: PaletteKey): string {
   return `--rv-${key.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`)}`;
 }
 
-/** CSS declarations (`--rv-x: value;`) for one palette. */
-export function paletteCss(mode: ColorMode): string {
+/**
+ * Colours (and fonts) that replace a palette's own: what a host page shows instead, such as a
+ * Docusaurus site's colours or a `custom.css` override, resolved to literal values
+ * (`resolvePalette` reads them from the page).
+ */
+export type PaletteOverrides = Partial<Palette> & {
+  /** Font of names and notes (`--rv-font`). */
+  font?: string;
+  /** Font of column types (`--rv-mono`). */
+  mono?: string;
+};
+
+/** CSS declarations (`--rv-x: value;`) for one palette, with `overrides` applied. */
+export function paletteCss(mode: ColorMode, overrides?: PaletteOverrides): string {
   return (Object.keys(PALETTES[mode]) as PaletteKey[])
-    .map((k) => `${cssVarName(k)}: ${PALETTES[mode][k]};`)
+    .map((k) => `${cssVarName(k)}: ${overrides?.[k] ?? PALETTES[mode][k]};`)
     .join(' ');
 }
 
@@ -105,13 +119,28 @@ export function paletteCss(mode: ColorMode): string {
 export interface ColorResolver {
   mode: ColorMode;
   c(key: PaletteKey): string;
+  /** The literal colour behind `c(key)` (an override, else the palette's), for colour maths. */
+  value(key: PaletteKey): string;
+  /** `font-family` of names and notes, and of column types. */
+  font: string;
+  mono: string;
 }
 
-export function colorResolver(mode: ColorMode, literal = false): ColorResolver {
+export function colorResolver(
+  mode: ColorMode,
+  literal = false,
+  overrides?: PaletteOverrides | null,
+): ColorResolver {
   const p = PALETTES[mode];
+  const value = (k: PaletteKey) => overrides?.[k] ?? p[k];
+  const font = overrides?.font ?? METRICS.fontFamily;
+  const mono = overrides?.mono ?? METRICS.monoFontFamily;
   return {
     mode,
-    c: literal ? (k) => p[k] : (k) => `var(${cssVarName(k)}, ${p[k]})`,
+    c: literal ? value : (k) => `var(${cssVarName(k)}, ${value(k)})`,
+    value,
+    font: literal ? font : `var(--rv-font, ${font})`,
+    mono: literal ? mono : `var(--rv-mono, ${mono})`,
   };
 }
 
@@ -124,13 +153,23 @@ export interface Rgb {
   b: number;
 }
 
-/** Parses `#rgb`, `#rrggbb` (and ignores alpha in `#rrggbbaa`). Returns null for anything else. */
+/**
+ * Parses `#rgb`, `#rrggbb` (ignoring alpha in `#rrggbbaa`) and `rgb()` / `rgba()` with numbers.
+ * Returns null for anything else.
+ */
 export function parseHex(color: string | null | undefined): Rgb | null {
   if (!color) return null;
+  const fn = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)\s*(?:[,/]\s*[\d.]+%?\s*)?\)$/i.exec(
+    color.trim(),
+  );
+  if (fn) return { r: Number(fn[1]), g: Number(fn[2]), b: Number(fn[3]) };
   const m = /^#([0-9a-f]{3,8})$/i.exec(color.trim());
   if (!m) return null;
   let h = m[1]!;
-  if (h.length === 3 || h.length === 4) h = [...h.slice(0, 3)].map((c) => c + c).join('');
+  if (h.length === 3 || h.length === 4)
+    h = Array.from(h.slice(0, 3))
+      .map((c) => c + c)
+      .join('');
   if (h.length !== 6 && h.length !== 8) return null;
   return {
     r: parseInt(h.slice(0, 2), 16),
@@ -152,7 +191,7 @@ export function mix(a: Rgb, b: Rgb, t: number): Rgb {
   return { r: a.r + (b.r - a.r) * t, g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t };
 }
 
-function relativeLuminance({ r, g, b }: Rgb): number {
+export function relativeLuminance({ r, g, b }: Rgb): number {
   const ch = (v: number) => {
     const s = v / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
@@ -222,6 +261,30 @@ export function withContrast(color: Rgb, bg: Rgb, ratio: number, opacity = 1): R
     else lo = mid;
   }
   return at(hi);
+}
+
+/**
+ * Colours of a TableGroup on a canvas of colour `canvasBg`: its tint (drawn at low opacity), border
+ * (half opacity) and label. A user colour too close to the canvas, such as a dark blue on a dark
+ * canvas or a pale yellow on a light one, has its lightness moved until the label reads at 4.5:1,
+ * the border at 3:1 and the tint shows; hue and saturation are kept. Colours that are not hex or
+ * `rgb()` are used as given.
+ */
+export function groupColors(
+  color: string,
+  canvasBg: string,
+): { fill: string; stroke: string; text: string } {
+  const rgb = parseHex(color);
+  const bg = parseHex(canvasBg);
+  if (!rgb || !bg) return { fill: color, stroke: color, text: color };
+  const dark = relativeLuminance(bg) < 0.5;
+  return {
+    // A tint of 7-14% shows on a light canvas whatever the colour; on a dark one only a colour
+    // well above the canvas does.
+    fill: dark ? toHex(withContrast(rgb, bg, 3)) : color,
+    stroke: toHex(withContrast(rgb, bg, 3, 0.5)),
+    text: toHex(withContrast(rgb, bg, 4.5)),
+  };
 }
 
 /** Readable text colour on top of `bg`: near-white on dark colours, near-black on light ones. */

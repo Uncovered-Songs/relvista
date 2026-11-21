@@ -42,7 +42,7 @@ function RowHandles({ ids }: { ids: ReadonlySet<string> | undefined }): ReactEle
   if (!ids || ids.size === 0) return null;
   return (
     <>
-      {[...ids].map((id) => {
+      {Array.from(ids).map((id) => {
         const h = parseHandleId(id);
         if (!h) return null;
         return (

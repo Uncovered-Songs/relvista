@@ -35,13 +35,19 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Builds core → renderer → theme → editor → docs; the docs build copies the editor into
+      # Builds core → renderer → docusaurus-plugin → editor → docs; the docs build copies the editor into
       # apps/docs/build/editor/, so one artifact serves /relvista/ and /relvista/editor/.
       - name: Build packages, editor and docs
         run: pnpm docs:build
 
       - name: Check the editor is in the artifact
         run: test -f apps/docs/build/editor/index.html
+
+      - name: Check third-party notices are up to date and shipped
+        run: |
+          pnpm notices:check
+          test -f apps/docs/build/editor/THIRD_PARTY_NOTICES.txt
+          test -f apps/docs/build/third-party-notices.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v6

@@ -120,6 +120,16 @@ test('landing page shows the live e-commerce diagram', async ({ page }) => {
   await screenshot(page, 'home-dark');
 });
 
+test('no page scrolls sideways on a phone', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  for (const path of ['', 'docs/getting-started', 'docs/usage', 'docs/gallery/02-ecommerce']) {
+    await page.goto(path);
+    await settled(page.locator('.relvista-diagram').first());
+    const width = await page.evaluate(() => document.documentElement.scrollWidth);
+    expect(width, `${path || 'landing'} is ${width}px wide`).toBeLessThanOrEqual(390);
+  }
+});
+
 test('usage page: fences, src, layout files and source tabs all render', async ({ page }) => {
   await page.goto('docs/usage');
   const diagrams = page.locator('.relvista-diagram');
@@ -178,9 +188,12 @@ test('theme toggle switches the diagram colour mode', async ({ page }) => {
   }
   await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
   await expect(viewer).toHaveAttribute('data-rv-color-mode', 'dark');
-  // The canvas really changes colour, too.
-  const bg = await viewer.evaluate((el) => getComputedStyle(el).getPropertyValue('--rv-canvas-bg'));
-  expect(bg.trim()).toBe('#0f1217');
+  // The canvas really changes colour, too: to the site's dark surfaces (the site palette).
+  await expect(viewer).toHaveClass(/rv-palette-site/);
+  const bg = await viewer.evaluate((el) => getComputedStyle(el).backgroundColor);
+  const [r, g, b] = (bg.match(/[\d.]+/g) ?? []).slice(0, 3).map(Number) as [number, number, number];
+  const scale = bg.startsWith('color(') ? 255 : 1;
+  expect(Math.max(r, g, b) * scale).toBeLessThan(60);
 });
 
 test('the navbar links to the editor, which is part of the build', async ({ page }) => {

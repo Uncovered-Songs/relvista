@@ -1,12 +1,16 @@
 /*
- * @relvista/renderer styles. Built into dist/styles.css after React Flow's own CSS.
- * Diagram colours: keep in sync with src/theme.ts (PALETTES); test/theme.test.ts checks it.
+ * @relvista/renderer styles. Built into dist/styles.css, which imports React Flow's CSS first
+ * (dist/xyflow.css, see scripts/copy-css.mjs). Diagram colours: keep in sync with src/theme.ts
+ * (PALETTES); test/theme.test.ts checks it.
+ *
+ * The palettes are declared with zero specificity (`:where`) and only on the outermost relvista
+ * element (a viewer, or a canvas or diagram that is not inside a viewer); everything inside
+ * inherits them. So any rule of a page, such as `.rv-viewer { --rv-header-bg: … }` in a Docusaurus
+ * custom.css, overrides them whatever the load order, and reaches the whole diagram.
  */
 
 /* --- palette: light --------------------------------------------------------------------- */
-.rv-viewer,
-.rv-diagram,
-[data-rv-color-mode='light'] {
+:where(.rv-viewer, .rv-canvas, .rv-diagram, [data-rv-color-mode]):where(:not(.rv-viewer *)) {
   --rv-canvas-bg: #f6f7f9;
   --rv-grid-dot: #d3d8e0;
   --rv-table-bg: #ffffff;
@@ -49,7 +53,7 @@
 }
 
 /* --- palette: dark ---------------------------------------------------------------------- */
-[data-rv-color-mode='dark'] {
+:where([data-rv-color-mode='dark']):where(:not(.rv-viewer *)) {
   --rv-canvas-bg: #0f1217;
   --rv-grid-dot: #2a2f39;
   --rv-table-bg: #1a1f28;

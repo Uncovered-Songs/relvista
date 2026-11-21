@@ -94,10 +94,12 @@ import DbmlDiagram from '@theme/DbmlDiagram';
 | `detailLevel` | `'all'` \| `'keys'` \| `'names'` | Overrides the site default and the layout file.                                               |
 | `toolbar`     | array of toolbar items           | Overrides `themeConfig.dbml.toolbar`.                                                         |
 | `editorUrl`   | `string`                         | Overrides `themeConfig.dbml.editorUrl`.                                                       |
+| `palette`     | `'site'` \| `'relvista'`         | Overrides `themeConfig.dbml.palette` ([colours](./colours.md)).                               |
+| `className`   | `string`                         | Class on the diagram's wrapper, e.g. to override `--rv-*` variables for one diagram.          |
 
 ## `.dbml` files
 
-The theme teaches webpack to import `.dbml` files as text, so a schema can live next to your docs (or
+The plugin teaches webpack to import `.dbml` files as text, so a schema can live next to your docs (or
 anywhere in the repository) and stay a normal file that dbdiagram.io and other tools can open:
 
 ```mdx
@@ -195,19 +197,15 @@ Every diagram has a toolbar in its top-right corner:
 - **Print** — prints just the diagram, scaled to fit a landscape page.
 - **Open in editor** — when `editorUrl` is configured.
 
-Exports and prints use the current colour mode and detail level, and include tables you dragged
-where you left them.
+Exports use the current colour mode, the colours and fonts the diagram shows and its detail level,
+and include tables you dragged where you left them. Prints use the same detail level and light
+colours.
 
-## Colour mode
+## Colours
 
-Diagrams follow the site's light/dark switch automatically. Colours are CSS variables named
-`--rv-*`, so you can restyle them in your `custom.css`:
-
-```css title="src/css/custom.css"
-[data-theme='dark'] .rv-viewer {
-  --rv-canvas-bg: #0b0d12;
-  --rv-header-bg: #334155;
-}
-```
+Diagrams follow the site's light/dark switch, and by default take your site's colours and fonts
+(primary colour for table headers and highlights, surfaces, text, fonts). Every colour is a `--rv-*`
+CSS variable you can override in `custom.css`, and `themeConfig.dbml.palette: 'relvista'` keeps
+relvista's own palette. See [Colours and fonts](./colours.md) for the full list.
 
 Tables with a `headercolor` setting in the DBML keep their colour in both modes.

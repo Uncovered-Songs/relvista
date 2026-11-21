@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { diagramReady, openEditor } from './helpers.js';
+import { diagramReady, openEditor, pasteAtEnd } from './helpers.js';
 
 test('390 px: tabs switch panes, overflow menu, no horizontal scroll', async ({ page }) => {
   await openEditor(page);
@@ -51,4 +51,19 @@ test('390 px: touch targets are 44 px and the share link field is readable', asy
   expect(await page.locator('#ed-share-link').evaluate((el) => getComputedStyle(el).fontSize)).toBe(
     '14px',
   );
+});
+
+test('390 px: code wraps and the gutter is only line numbers', async ({ page }) => {
+  await openEditor(page);
+  await pasteAtEnd(page, `// ${'wrap '.repeat(80)}end`);
+  const editor = page.locator('.monaco-editor').first();
+  // One line of text, drawn on several screen rows, and no horizontal scrollbar.
+  await expect.poll(() => editor.locator('.view-line').count()).toBeGreaterThan(3);
+  expect(
+    await editor.locator('.view-lines').evaluate((el) => el.scrollWidth <= el.clientWidth + 1),
+  ).toBe(true);
+  // No glyph margin, no folding arrows: the gutter is the line numbers (2 digits) and a little gap.
+  await expect(editor.locator('.cldr.codicon-folding-expanded, .folding')).toHaveCount(0);
+  const gutter = (await editor.locator('.margin').boundingBox())!;
+  expect(gutter.width).toBeLessThan(40);
 });

@@ -87,7 +87,7 @@ describe('dark-mode group colours', () => {
     expect(withContrast(light, bg, 4.5)).toBe(light);
   });
 
-  it('GroupSvg lightens the label and border in dark mode only, the tint stays as given', () => {
+  it('GroupSvg adjusts a dark group colour (tint, border, label) to the dark canvas only', () => {
     const group = { id: 'group:t', name: 'tenancy', tableIds: [], color: '#2c3e50' };
     const draw = (mode: 'light' | 'dark') =>
       renderToStaticMarkup(
@@ -105,7 +105,39 @@ describe('dark-mode group colours', () => {
     const dark = draw('dark');
     const textFill = /<text[^>]*style="fill:(#[0-9a-f]{6})/i.exec(dark)![1]!;
     expect(contrastRatio(parseHex(textFill)!, bg)).toBeGreaterThanOrEqual(4.5);
-    expect(dark).toMatch(/<rect[^>]*style="fill:#2c3e50;stroke:#(?!2c3e50)/i);
+    // The tint too: a raw #2c3e50 at 7% would not show on the dark canvas.
+    const [, fill, stroke] = /<rect[^>]*style="fill:(#[0-9a-f]{6});stroke:(#[0-9a-f]{6})/i.exec(
+      dark,
+    )!;
+    expect(contrastRatio(parseHex(fill)!, bg)).toBeGreaterThanOrEqual(3);
+    expect(contrastRatio(parseHex(stroke)!, bg)).toBeGreaterThan(
+      contrastRatio(parseHex(fill)!, bg),
+    );
+    // Hue kept: still the slate blue.
+    expect(parseHex(fill)!.b).toBeGreaterThan(parseHex(fill)!.r);
+  });
+
+  it('GroupSvg darkens a pale group label on the light canvas, and uses the canvas it is drawn on', () => {
+    const group = { id: 'group:y', name: 'pale', tableIds: [], color: '#f1e05a' };
+    const box = { id: 'group:y', kind: 'group', x: 0, y: 0, width: 400, height: 300 } as never;
+    const draw = (mode: 'light' | 'dark', canvasBg?: string) =>
+      renderToStaticMarkup(
+        <ColorContext.Provider value={colorResolver(mode, false, canvasBg ? { canvasBg } : null)}>
+          <svg>
+            <GroupSvg group={group as never} box={box} />
+          </svg>
+        </ColorContext.Provider>,
+      );
+    const label = (svg: string) => parseHex(/<text[^>]*style="fill:(#[0-9a-f]{6})/i.exec(svg)![1])!;
+    const lightBg = parseHex(PALETTES.light.canvasBg)!;
+    expect(contrastRatio(label(draw('light')), lightBg)).toBeGreaterThanOrEqual(4.5);
+    // The tint keeps the colour on a light canvas.
+    expect(draw('light')).toMatch(/<rect[^>]*style="fill:#f1e05a;/i);
+    // A site palette's darker canvas (resolved from the page) is what the label is checked against.
+    const siteBg = '#3b2f4a';
+    expect(contrastRatio(label(draw('dark', siteBg)), parseHex(siteBg)!)).toBeGreaterThanOrEqual(
+      4.5,
+    );
   });
 });
 
