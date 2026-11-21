@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Joi } from '@docusaurus/utils-validation';
 import type { LoadContext } from '@docusaurus/types';
+import { DEFAULT_EDITOR_URL as RENDERER_EDITOR_URL } from '@relvista/renderer';
 import themeRelvista, {
   DEFAULT_THEME_CONFIG,
   parseDbmlMeta,
@@ -61,6 +62,21 @@ describe('validateThemeConfig', () => {
       detailLevel: 'keys',
     };
     expect(validateThemeConfig({ validate, themeConfig: { dbml } as never })).toEqual({ dbml });
+  });
+
+  it('defaults editorUrl to the hosted editor (same URL as the renderer)', () => {
+    const out = validateThemeConfig({ validate, themeConfig: {} as never });
+    expect(out.dbml.editorUrl).toBe(RENDERER_EDITOR_URL);
+  });
+
+  it('accepts editorUrl: false (hides the button) and relative URLs', () => {
+    for (const editorUrl of [false, '/relvista/editor/', 'editor/']) {
+      const out = validateThemeConfig({ validate, themeConfig: { dbml: { editorUrl } } as never });
+      expect(out.dbml.editorUrl).toBe(editorUrl);
+    }
+    expect(() =>
+      validateThemeConfig({ validate, themeConfig: { dbml: { editorUrl: true } } as never }),
+    ).toThrow();
   });
 
   it('rejects bad values', () => {

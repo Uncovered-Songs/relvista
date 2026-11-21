@@ -34,7 +34,8 @@ declare module '@theme/DbmlDiagram' {
     readonly source?: boolean;
     readonly detailLevel?: DetailLevel;
     readonly toolbar?: ToolbarItem[];
-    readonly editorUrl?: string;
+    /** Overrides `themeConfig.dbml.editorUrl`; `false` hides "Open in editor". */
+    readonly editorUrl?: string | false;
     readonly className?: string;
   }
 

@@ -3,6 +3,7 @@ import type { ThemeConfigValidationContext } from '@docusaurus/types';
 import { DEFAULT_THEME_CONFIG, TOOLBAR_ITEMS, type ThemeConfig } from './defaults.js';
 
 export {
+  DEFAULT_EDITOR_URL,
   DEFAULT_THEME_CONFIG,
   TOOLBAR_ITEMS,
   type DbmlThemeConfig,
@@ -18,7 +19,9 @@ export const ThemeConfigSchema = Joi.object<ThemeConfig>({
       .items(Joi.string().valid(...TOOLBAR_ITEMS))
       .unique()
       .default(DEFAULT_THEME_CONFIG.dbml.toolbar),
-    editorUrl: Joi.string().uri({ allowRelative: true }),
+    editorUrl: Joi.alternatives()
+      .try(Joi.string().uri({ allowRelative: true }), Joi.boolean().valid(false))
+      .default(DEFAULT_THEME_CONFIG.dbml.editorUrl),
     detailLevel: Joi.string()
       .valid('all', 'keys', 'names')
       .default(DEFAULT_THEME_CONFIG.dbml.detailLevel),

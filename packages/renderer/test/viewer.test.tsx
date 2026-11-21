@@ -2,7 +2,7 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { DbmlViewer } from '../src/viewer/DbmlViewer.js';
-import { editorLink } from '../src/viewer/editorLink.js';
+import { createEditorLink, decodeShareHash, entrySource } from '../src/share/index.js';
 import { parseHandleId, handleId } from '../src/viewer/context.js';
 import { loadExamples } from './examples.js';
 
@@ -88,6 +88,7 @@ describe('DbmlViewer', () => {
     expect(screen.getByText('Download PNG')).toBeTruthy();
     const link = screen.getByLabelText('Open in editor') as HTMLAnchorElement;
     expect(link.href.startsWith('https://example.org/editor/#dbml=')).toBe(true);
+    expect((await decodeShareHash(link.hash))?.dbml).toBe(GOOD);
   });
 
   it('switches views and falls back to the overlay for fullscreen', async () => {
@@ -114,13 +115,14 @@ describe('DbmlViewer', () => {
 });
 
 describe('viewer helpers', () => {
-  it('builds editor links', () => {
-    expect(editorLink('https://x.dev/e', 'Table a {}')).toBe(
-      'https://x.dev/e#dbml=' + encodeURIComponent('Table a {}'),
-    );
-    expect(editorLink('https://x.dev/e#q', { files: { 'm.dbml': 'x' }, entry: 'm.dbml' })).toBe(
-      'https://x.dev/e#dbml=x',
-    );
+  it('builds editor links', async () => {
+    const link = await createEditorLink('https://x.dev/e', { dbml: 'Table a {}' });
+    expect(link).toMatch(/^https:\/\/x\.dev\/e#dbml=[A-Za-z0-9_-]+$/);
+    expect((await decodeShareHash(new URL(link).hash))?.dbml).toBe('Table a {}');
+    const multi = { files: { 'm.dbml': 'x' }, entry: 'm.dbml' };
+    const replaced = await createEditorLink('https://x.dev/e#q', { dbml: entrySource(multi) });
+    expect(replaced.startsWith('https://x.dev/e#dbml=')).toBe(true);
+    expect((await decodeShareHash(replaced.slice(replaced.indexOf('#'))))?.dbml).toBe('x');
   });
 
   it('round-trips handle ids', () => {

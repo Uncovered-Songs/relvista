@@ -1,0 +1,69 @@
+/*
+ * Editor tokens. Diagram colours come from @relvista/renderer (--rv-*); the editor chrome reuses
+ * its --rv-ui-* values and adds its own --ed-* tokens. Theme: [data-theme] on <html>, set before
+ * first paint by the inline script in index.html (shared 'theme' key with the docs site).
+ */
+:root,
+:root[data-theme='light'] {
+  color-scheme: light;
+  --ed-bg: #f6f7f9;
+  --ed-surface: #ffffff;
+  --ed-surface-raised: #ffffff;
+  --ed-subtle: #f3f5f8;
+  --ed-border: #dde1e8;
+  --ed-border-strong: #c7cdd7;
+  --ed-text: #1f2633;
+  --ed-muted: #5f6b7e;
+  --ed-hover: #eef1f5;
+  --ed-active: #e2e7ee;
+  --ed-accent: #2f6fed;
+  --ed-accent-hover: #2560d6;
+  --ed-accent-text: #ffffff;
+  --ed-accent-soft: #eaf1ff;
+  --ed-focus: #2f6fed;
+  --ed-danger: #c22b2b;
+  --ed-danger-soft: #fdecec;
+  --ed-warning: #a14a07;
+  --ed-warning-soft: #fff4e0;
+  --ed-success: #0f7b6c;
+  --ed-success-soft: #e3f6f2;
+  --ed-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.08);
+  --ed-shadow-lg: 0 12px 32px rgba(16, 24, 40, 0.16), 0 2px 6px rgba(16, 24, 40, 0.08);
+  --ed-backdrop: rgba(15, 18, 23, 0.36);
+  --ed-flash: rgba(47, 111, 237, 0.16);
+  --ed-font: Inter, ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --ed-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --ed-radius: 6px;
+  --ed-radius-lg: 10px;
+  --ed-topbar-h: 48px;
+  --ed-status-h: 26px;
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --ed-bg: #0f1217;
+  --ed-surface: #1a1f28;
+  --ed-surface-raised: #212734;
+  --ed-subtle: #161a22;
+  --ed-border: #313846;
+  --ed-border-strong: #424b5c;
+  --ed-text: #e4e8ef;
+  --ed-muted: #98a2b3;
+  --ed-hover: #262d39;
+  --ed-active: #303847;
+  --ed-accent: #5b9bff;
+  --ed-accent-hover: #7aaeff;
+  --ed-accent-text: #0b1220;
+  --ed-accent-soft: #1f2d45;
+  --ed-focus: #5b9bff;
+  --ed-danger: #ff7b7b;
+  --ed-danger-soft: #3a1f24;
+  --ed-warning: #e6b836;
+  --ed-warning-soft: #3b3420;
+  --ed-success: #3cc7ae;
+  --ed-success-soft: #173430;
+  --ed-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 16px rgba(0, 0, 0, 0.35);
+  --ed-shadow-lg: 0 16px 40px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.4);
+  --ed-backdrop: rgba(0, 0, 0, 0.55);
+  --ed-flash: rgba(91, 155, 255, 0.22);
+}

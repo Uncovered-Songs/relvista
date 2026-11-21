@@ -1,3 +1,77 @@
-# Editor website
+# relvista editor
 
-Placeholder — built in phase 2 (Vite SPA). See the project README.
+The editor website: Monaco DBML editing with a live, editable ER diagram, file-based saving
+(File System Access API with a download fallback), share links and exports. Static Vite SPA,
+deployed at <https://uncovered-songs.github.io/relvista/editor/> inside the docs Pages artifact.
+
+Design and contracts: [`docs/design/phase2-editor.md`](../../docs/design/phase2-editor.md),
+decision [0004](../../docs/decisions/0004-editor.md).
+
+## Commands
+
+From the repository root:
+
+```sh
+pnpm editor:dev           # builds core + renderer, then http://localhost:5173/relvista/editor/
+pnpm editor:build         # core + renderer + editor (typecheck + dist/)
+pnpm docs:build           # the Pages site: docs, with the editor copied into apps/docs/build/editor/
+pnpm test:e2e:editor      # Playwright against that site (run docs:build first)
+```
+
+Inside `apps/editor`: `pnpm test` (unit tests, vitest), `pnpm typecheck`, `pnpm build`.
+
+`RELVISTA_EDITOR_BASE=/` serves the app at the root instead of `/relvista/editor/`.
+
+## Deployment
+
+The editor has no deployment of its own. `apps/docs` lists it as a dev dependency, so
+`pnpm docs:build` builds it first; the docs build then runs `scripts/copy-editor.mjs`, which copies
+`dist/` (without source maps) to `apps/docs/build/editor/`. `.github/workflows/deploy-docs.yml`
+uploads that one folder to GitHub Pages: the docs at `/relvista/`, the editor at `/relvista/editor/`.
+The docs navbar, the landing page and every docs diagram ("Open in editor") link to it.
+
+## End-to-end tests
+
+`pnpm test:e2e:editor` serves `apps/docs/build` the way GitHub Pages does
+(`apps/docs/scripts/serve-site.mjs`) and runs `e2e/` in Chromium at 1360×900, plus `mobile.spec.ts`
+at 390×844. Install the browser once with `pnpm --filter relvista-editor exec playwright install
+chromium`.
+
+| Spec                  | Covers                                                                                                                                          |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `roundtrip.spec.ts`   | **Gate:** every example saves byte-identical: 7 BOM/line-ending variants via FSA, 5 via `<input type=file>` + download; the `12-modules` folder |
+| `examples.spec.ts`    | every example from the examples picker draws all its tables, no errors                                                                          |
+| `live-edit.spec.ts`   | typing draws tables; a syntax error keeps the last good diagram; fixing it updates                                                              |
+| `drag.spec.ts`        | dragging writes integer positions to the sidecar and the exported layout JSON; undo                                                             |
+| `share.spec.ts`       | share link → new page: same text (byte for byte), positions and view; old links                                                                 |
+| `site.spec.ts`        | docs navbar, landing CTA and gallery "Open in editor" land in the editor                                                                        |
+| `theme.spec.ts`       | theme button, OS theme, persistence shared with the docs                                                                                        |
+| `mobile.spec.ts`      | Code / Diagram tabs, overflow menu, no horizontal scroll                                                                                        |
+| `screenshots.spec.ts` | review screenshots (`RELVISTA_EDITOR_SHOTS=<dir>`, default `test-results/`)                                                                     |
+| others                | autolayout, sync, language features, `?url=`, session restore, export, axe                                                                      |
+
+`RELVISTA_EDITOR_E2E_SERVER=preview` runs against `vite preview` of `dist/` instead (no docs
+build needed); `site.spec.ts` then skips.
+
+## Layout
+
+```text
+src/
+  App.tsx, main.tsx     shell and bootstrap
+  state/                store (useSyncExternalStore), compile, layout history, autosave, renames
+  monaco/               setup, DBML language + themes, language services, hover, markers
+  files/                byte-exact text handling, File System Access, fallbacks, folders, sidecar, ?url=
+  share/                share links (codec lives in @relvista/renderer)
+  sql/                  @dbml/core in a module worker (loaded on first SQL use)
+  diagram/              DiagramCanvas pane, editor ↔ diagram sync
+  components/           top bar, menus, dialogs, split, status bar, mobile tabs
+test/                   unit tests (pure modules)
+e2e/                    Playwright specs; roundtrip.spec.ts is the phase-2 gate
+```
+
+## Saving guarantees
+
+An unedited file is written back byte for byte; an edited file keeps its BOM and every unchanged
+line's terminator (CRLF, LF, lone CR, mixed). The layout sidecar is written only after a user
+layout change. `e2e/roundtrip.spec.ts` checks every example in seven variants through both the
+File System Access path and the download fallback.

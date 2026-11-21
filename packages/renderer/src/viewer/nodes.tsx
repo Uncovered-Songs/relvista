@@ -1,11 +1,17 @@
-import type { DetailLevel, StickyNote, Table, TableGroup } from '@relvista/core';
+import {
+  METRICS,
+  type DetailLevel,
+  type StickyNote,
+  type Table,
+  type TableGroup,
+} from '@relvista/core';
 import { Handle, Position, type Node, type NodeProps } from '@xyflow/react';
 import { memo, type ReactElement } from 'react';
 import { GroupSvg } from '../svg/GroupSvg.js';
 import { NoteSvg } from '../svg/NoteSvg.js';
 import { rowCenterOffset } from '../svg/routing.js';
 import { TableSvg } from '../svg/TableSvg.js';
-import { parseHandleId, useViewerState } from './context.js';
+import { parseHandleId, useViewerState, type ViewerState } from './context.js';
 
 export type TableFlowNode = Node<
   {
@@ -54,6 +60,18 @@ function RowHandles({ ids }: { ids: ReadonlySet<string> | undefined }): ReactEle
   );
 }
 
+/** `rv-node` classes shared by every node: kind, details card, selection, highlight ring. */
+function nodeClass(kind: string, id: string, v: ViewerState): string {
+  let c = `rv-node rv-node-${kind}`;
+  if (v.selectedId === id || v.selection.has(id)) c += ' rv-selected';
+  if (v.highlightedId === id) c += ' rv-highlighted';
+  return c;
+}
+
+function isDimmed(id: string, v: ViewerState): boolean {
+  return v.lit && v.dim ? !v.lit.tables.has(id) : false;
+}
+
 export const TableNode = memo(function TableNode({
   id,
   data,
@@ -61,18 +79,15 @@ export const TableNode = memo(function TableNode({
   const v = useViewerState();
   const { w, h, table } = data;
   return (
-    <div
-      className={`rv-node rv-node-table${v.selectedId === id ? ' rv-selected' : ''}`}
-      style={{ width: w, height: h }}
-    >
+    <div className={nodeClass('table', id, v)} style={{ width: w, height: h }}>
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="rv-node-svg">
         <TableSvg
           table={table}
           box={{ x: 0, y: 0, width: w, height: h }}
           detailLevel={data.detail ?? v.detailLevel}
-          dimmed={v.lit ? !v.lit.tables.has(id) : false}
-          highlighted={v.hoveredId === id}
-          selected={v.selectedId === id}
+          dimmed={isDimmed(id, v)}
+          highlighted={v.hoveredId === id || v.highlightedId === id}
+          selected={v.selectedId === id || v.selection.has(id)}
           highlightColumns={v.lit?.columns.get(id) ?? null}
         />
       </svg>
@@ -88,27 +103,34 @@ export const NoteNode = memo(function NoteNode({
   const v = useViewerState();
   const { w, h, note } = data;
   return (
-    <div className="rv-node rv-node-note" style={{ width: w, height: h }}>
+    <div className={nodeClass('note', id, v)} style={{ width: w, height: h }}>
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="rv-node-svg">
-        <NoteSvg
-          note={note}
-          box={{ x: 0, y: 0, width: w, height: h }}
-          dimmed={v.lit ? !v.lit.tables.has(id) : false}
-        />
+        <NoteSvg note={note} box={{ x: 0, y: 0, width: w, height: h }} dimmed={isDimmed(id, v)} />
       </svg>
     </div>
   );
 });
 
-export const GroupNode = memo(function GroupNode({ data }: NodeProps<GroupFlowNode>): ReactElement {
+export const GroupNode = memo(function GroupNode({
+  id,
+  data,
+}: NodeProps<GroupFlowNode>): ReactElement {
   const v = useViewerState();
   const { w, h, group } = data;
-  const dimmed = v.lit ? !group.tableIds.some((t) => v.lit!.tables.has(t)) : false;
+  const dimmed = v.lit && v.dim ? !group.tableIds.some((t) => v.lit!.tables.has(t)) : false;
   return (
-    <div className="rv-node rv-node-group" style={{ width: w, height: h }}>
+    <div className={nodeClass('group', id, v)} style={{ width: w, height: h }}>
       <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="rv-node-svg">
         <GroupSvg group={group} box={{ x: 0, y: 0, width: w, height: h }} dimmed={dimmed} />
       </svg>
+      {v.groupHandles ? (
+        <div
+          className="rv-group-drag"
+          style={{ height: METRICS.groupHeaderHeight }}
+          title={group.name}
+          aria-hidden="true"
+        />
+      ) : null}
     </div>
   );
 });

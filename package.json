@@ -17,7 +17,11 @@
     "changeset": "changeset",
     "docs:build": "pnpm --filter relvista-docs... build",
     "docs:start": "pnpm --filter \"relvista-docs^...\" build && pnpm --filter relvista-docs start",
-    "test:e2e": "pnpm --filter relvista-docs test:e2e"
+    "editor:dev": "pnpm --filter \"relvista-editor^...\" build && pnpm --filter relvista-editor dev",
+    "editor:build": "pnpm --filter relvista-editor... build",
+    "test:e2e": "pnpm test:e2e:docs && pnpm test:e2e:editor",
+    "test:e2e:docs": "pnpm --filter relvista-docs test:e2e",
+    "test:e2e:editor": "pnpm --filter relvista-editor test:e2e"
   },
   "devDependencies": {
     "@changesets/cli": "^3.0.3",

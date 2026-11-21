@@ -50,7 +50,8 @@ printDiagram(model, geometry, opts) : void                    // browser only, h
   toolbar?: Array<'zoom' | 'fit' | 'fullscreen' | 'export' | 'print' | 'view' | 'open-in-editor'>
   editorUrl?: string
   onDiagnostics?: (d: Diagnostic[]) => void
-  minimap?: boolean | 'auto'      // default 'auto': ≥ 8 tables and viewer ≥ 600px wide
+  minimap?: boolean | 'auto'      // default 'auto': ≥ 8 tables and viewer ≥ 600px wide, or
+                                  // whenever part of the diagram is off-screen (smaller < 600px)
   workerUrl?: string | URL        // elk-worker.min.js; ELK then runs in a Web Worker
 />
 ```
@@ -60,10 +61,17 @@ printDiagram(model, geometry, opts) : void                    // browser only, h
 - Fullscreen: `requestFullscreen()` on the viewer root; fallback fixed overlay closed with Esc.
 - Parse errors: last good diagram stays; an error banner lists diagnostics with line:column, in
   source order.
-- Initial view: fit, but never below zoom 0.85 (0.75 below 600px wide). A bigger diagram opens at
-  that zoom on the window showing the most whole tables: tables at the viewer edges are whole, not
-  sliced, nothing starts under the title / toolbar band, the minimap corner is avoided, and ties go
-  to the top-left. The Fit button shows everything.
+- Initial view: fit when the fit zoom is at least the fit floor (0.45 for up to 12 tables, 0.55
+  above, 0.5 below 600px wide), so small diagrams open whole. Otherwise the zoom that fills one
+  axis when it lies between the floor and the readable zoom (0.85; 0.75 below 600px wide), else
+  the readable zoom, on the window showing the most whole tables: the first declared table is
+  whole when it fits, tables hidden just left of / above the window cost more than they gain (a
+  first view never skips the first column for one more table), tables at the viewer edges are
+  whole, not sliced, nothing starts under the title / toolbar band, a table under the minimap
+  counts as not shown, and ties go to the top-left. The 'auto' minimap then shows that there is
+  more; when the chosen window still leaves a table under it, the minimap waits for the first pan
+  or zoom (it is opaque, never drawn over a table in the first view). The Fit button shows
+  everything.
 - Refs whose ends meet at the same port (table, row, side) are fanned out vertically within the row
   (12px apart for two), so every end keeps its own cardinality marker. A saved `viewport` is kept when the ELK layout replaces
   the first (dagre) one.

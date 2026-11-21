@@ -35,6 +35,11 @@ export interface ViewportInput {
    * corner: the first view avoids putting tables under them.
    */
   obstacles?: readonly Box[];
+  /**
+   * The table a reader looks for first (the first one declared): when the window can hold it, the
+   * first view shows it whole.
+   */
+  anchor?: Box;
 }
 
 /**
@@ -55,31 +60,56 @@ export function fitViewport(input: Omit<ViewportInput, 'nodes'>): Viewport | nul
 }
 
 /**
- * First view: the fit, unless that is below `minZoom`. A diagram too big for that opens at
- * `minZoom` (readable) on the window that shows the most whole tables:
+ * First view: the fit, unless that is below `fitFloor` (default `minZoom`). A diagram too big for
+ * that opens at `minZoom` (readable), or lower down to `fitFloor` when that fills one axis (the
+ * spare room is used, not left as empty bands), on the window that shows the most whole tables:
  *
  * - every candidate window has a table or group edge, or the diagram's own edge, on a padded
  *   viewer edge, so tables at the borders are whole rather than sliced;
  * - tables cut by the window (or left under the overlays in the padding) count against it, more
- *   so at the top and left where a reader starts; a group whose label is cut off costs too;
+ *   so at the top and left where a reader starts; tables hidden entirely just left of or above
+ *   the window cost more than their area (the reader would not know they exist); a group whose label is
+ *   cut off costs too;
+ * - a table under an overlay (`obstacles`, e.g. the minimap) counts as not shown, and a bit
+ *   more; candidates that end a table just before the overlay are tried too (the canvas holds the
+ *   minimap back when the chosen window still covers a table);
  * - the window never extends past the diagram's bounds (no empty canvas beyond the edges) and its
  *   content starts at the padding, never under the title / toolbar band;
+ * - when the window can hold the first declared table (`anchor`), it does;
  * - ties go to the window nearest the diagram's top-left corner, where a reader starts.
  */
+/** Cost, in multiples of its area, of a table hidden left of or above the first view. */
+const HIDDEN_BEFORE_COST = 1.5;
+/**
+ * Cost, in multiples of its area, of a table under an overlay such as the minimap: it counts as
+ * not shown, and a little more, so a window that keeps it clear wins over one that does not.
+ */
+const OBSTACLE_COST = 0.25;
+
 export function initialViewport(
   input: ViewportInput & {
     minZoom: number;
     /** Padding of the fit, when it differs (e.g. room for the minimap all along the bottom). */
     fitPadding?: Padding;
+    /**
+     * Lowest zoom the first view uses to show the whole diagram, or to fill one axis of it
+     * (small diagrams, phones). Default `minZoom`.
+     */
+    fitFloor?: number;
   },
 ): Viewport | null {
   const fit = fitViewport({ ...input, padding: input.fitPadding ?? input.padding });
-  if (!fit || fit.zoom >= input.minZoom || input.nodes.length === 0) return fit;
-  const { bounds: b, width, height, padding: p, nodes, minZoom: zoom } = input;
+  const floor = Math.min(input.fitFloor ?? input.minZoom, input.minZoom);
+  if (!fit || fit.zoom >= floor || input.nodes.length === 0) return fit;
+  const { bounds: b, width, height, padding: p, nodes } = input;
   const groups = input.groups ?? [];
   const obstacles = input.obstacles ?? [];
   const aw = width - p.left - p.right;
   const ah = height - p.top - p.bottom;
+  // Between the floor and the readable zoom, the zoom that fills one axis exactly: the diagram
+  // pans along the other one only.
+  const fill = Math.min(input.maxZoom, Math.max(aw / b.width, ah / b.height));
+  const zoom = fill >= floor && fill < input.minZoom ? fill : input.minZoom;
   // World size of the visible window.
   const ww = aw / zoom;
   const wh = ah / zoom;
@@ -90,59 +120,101 @@ export function initialViewport(
     size: number,
     avail: number,
     boxes: readonly { s: number; e: number }[],
+    /** Window offsets (world) at which an overlay starts: a box may end just before one. */
+    stops: readonly number[],
   ): number[] => {
     if (size <= avail) return [start - (avail - size) / 2];
     const lo = start;
     const hi = start + size - avail;
     const out = new Set<number>([lo, hi]);
     for (const box of boxes) {
-      for (const v of [box.s, box.e - avail]) out.add(Math.min(hi, Math.max(lo, v)));
+      for (const v of [box.s, box.e - avail, ...stops.map((o) => box.e - o)])
+        out.add(Math.min(hi, Math.max(lo, v)));
     }
     return [...out];
   };
   const all = [...nodes, ...groups];
+  // Overlays in world units relative to the window's top-left corner.
+  const obs = obstacles.map((o) => ({
+    x: (o.x - p.left) / zoom,
+    y: (o.y - p.top) / zoom,
+    w: o.width / zoom,
+    h: o.height / zoom,
+  }));
   const xs = starts(
     b.x,
     b.width,
     ww,
     all.map((n) => ({ s: n.x, e: n.x + n.width })),
+    obs.filter((o) => o.x > 0 && o.x < ww).map((o) => o.x),
   );
   const ys = starts(
     b.y,
     b.height,
     wh,
     all.map((n) => ({ s: n.y, e: n.y + n.height })),
+    obs.filter((o) => o.y > 0 && o.y < wh).map((o) => o.y),
   );
 
   const diag = Math.hypot(b.width, b.height) || 1;
   // The padding band around the window is canvas too (under the title, toolbar and minimap).
   const [pl, pr, pt, pb] = [p.left / zoom, p.right / zoom, p.top / zoom, p.bottom / zoom];
-  let best = { x: xs[0]!, y: ys[0]!, score: -Infinity };
-  for (const x0 of xs) {
-    for (const y0 of ys) {
+  // Windows that hold the anchor whole, when any does.
+  const a = input.anchor;
+  const holds = (v: number, s: number, e: number, size: number) =>
+    s >= v - 0.5 && e <= v + size + 0.5;
+  const ax = a ? xs.filter((x) => holds(x, a.x, a.x + a.width, ww)) : [];
+  const ay = a ? ys.filter((y) => holds(y, a.y, a.y + a.height, wh)) : [];
+  if (a) {
+    // A window starting at the anchor (or ending at it) is always a candidate.
+    for (const v of [a.x, a.x + a.width - ww]) {
+      const c = Math.min(b.x + Math.max(0, b.width - ww), Math.max(b.x, v));
+      if (b.width > ww && holds(c, a.x, a.x + a.width, ww)) ax.push(c);
+    }
+    for (const v of [a.y, a.y + a.height - wh]) {
+      const c = Math.min(b.y + Math.max(0, b.height - wh), Math.max(b.y, v));
+      if (b.height > wh && holds(c, a.y, a.y + a.height, wh)) ay.push(c);
+    }
+  }
+  const xc = ax.length ? ax : xs;
+  const yc = ay.length ? ay : ys;
+  let best = { x: xc[0]!, y: yc[0]!, score: -Infinity };
+  for (const x0 of xc) {
+    for (const y0 of yc) {
       const x1 = x0 + ww;
       const y1 = y0 + wh;
       let score = 0;
       for (const n of nodes) {
         const nx1 = n.x + n.width;
         const ny1 = n.y + n.height;
-        // Not on screen at all.
-        if (nx1 <= x0 - pl || n.x >= x1 + pr || ny1 <= y0 - pt || n.y >= y1 + pb) continue;
         const area = n.width * n.height;
+        // Under an overlay (whole or sliced, the canvas draws it there): it counts as not shown.
+        if (
+          obs.some(
+            (o) =>
+              Math.min(nx1, x0 + o.x + o.w) > Math.max(n.x, x0 + o.x) &&
+              Math.min(ny1, y0 + o.y + o.h) > Math.max(n.y, y0 + o.y),
+          )
+        ) {
+          score -= OBSTACLE_COST * area;
+          continue;
+        }
+        // Not on screen at all. Just left of the window (in its rows) or just above it (in its
+        // columns), where a reader expects the start of the diagram, a hidden table costs more
+        // than its area: its refs run off the edge to nothing, so a window never skips the first
+        // column for one or two more whole tables.
+        const rows = ny1 > y0 && n.y < y1;
+        const cols = nx1 > x0 && n.x < x1;
+        if ((nx1 <= x0 - pl && rows) || (ny1 <= y0 - pt && cols)) {
+          score -= HIDDEN_BEFORE_COST * area;
+          continue;
+        }
+        if (nx1 <= x0 - pl || n.x >= x1 + pr || ny1 <= y0 - pt || n.y >= y1 + pb) continue;
         const ix = Math.max(0, Math.min(x1, nx1) - Math.max(x0, n.x));
         const iy = Math.max(0, Math.min(y1, ny1) - Math.max(y0, n.y));
         const seen = ix * iy;
         if (seen >= area - 0.5) {
-          // Whole, unless an overlay covers part of it.
-          let covered = 0;
-          for (const o of obstacles) {
-            const ox0 = x0 + (o.x - p.left) / zoom;
-            const oy0 = y0 + (o.y - p.top) / zoom;
-            const cx = Math.min(nx1, ox0 + o.width / zoom) - Math.max(n.x, ox0);
-            const cy = Math.min(ny1, oy0 + o.height / zoom) - Math.max(n.y, oy0);
-            if (cx > 0 && cy > 0) covered += cx * cy;
-          }
-          score += area - 2 * covered;
+          score += area;
           continue;
         }
         // A sliced table (or one under the overlays) costs what is hidden of it; sliced at the

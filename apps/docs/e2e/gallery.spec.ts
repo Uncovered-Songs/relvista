@@ -1,5 +1,5 @@
 // Phase-1 gate: the docs site renders every file in examples/ (decision 0001).
-import { mkdirSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { expect, test, type Locator, type Page } from '@playwright/test';
 import { examplePages } from './examples.js';
@@ -24,6 +24,22 @@ async function expectNoErrors(page: Page): Promise<void> {
   await expect(page.locator('.rv-empty')).toHaveCount(0);
 }
 
+/** Whether every table of a viewer is inside its canvas. */
+function allOnScreen(viewer: Locator): Promise<boolean> {
+  return viewer.evaluate((el) => {
+    const c = el.querySelector('.rv-canvas')!.getBoundingClientRect();
+    return Array.from(el.querySelectorAll('.react-flow__node-rvTable')).every((n) => {
+      const r = n.getBoundingClientRect();
+      return (
+        r.left >= c.left - 4 &&
+        r.right <= c.right + 4 &&
+        r.top >= c.top - 4 &&
+        r.bottom <= c.bottom + 4
+      );
+    });
+  });
+}
+
 /** Every diagram on the page shows the tables of its view; larger ones also get a minimap. */
 async function checkDiagrams(page: Page, tables: Record<string, number>): Promise<number> {
   const diagrams = page.locator('.relvista-diagram');
@@ -36,9 +52,16 @@ async function checkDiagrams(page: Page, tables: Record<string, number>): Promis
     expect(tables[view], `view ${view} exists`).toBeDefined();
     const viewer = await settled(diagram);
     await expect(viewer.locator('.react-flow__node-rvTable')).toHaveCount(tables[view]!);
-    // 'auto' minimap: 8 or more tables in a viewer at least 600px wide (the test viewport is).
-    if (tables[view]! >= 8) await expect(viewer.locator('.react-flow__minimap')).toBeVisible();
-    else await expect(viewer.locator('.react-flow__minimap')).toHaveCount(0);
+    // 'auto' minimap: 8 or more tables in a viewer at least 600px wide (the test viewport is),
+    // or whenever tables are off-screen; a diagram that is all on screen has none.
+    const minimap = viewer.locator('.react-flow__minimap');
+    if (tables[view]! >= 8) {
+      // A first view that leaves a table where the minimap goes holds it back until the first
+      // pan or zoom.
+      if ((await minimap.count()) === 0)
+        await viewer.getByRole('button', { name: 'Fit to view' }).click();
+      await expect(minimap).toBeVisible();
+    } else if ((await minimap.count()) === 0) expect(await allOnScreen(viewer)).toBe(true);
     // React Flow's attribution is credited in the README instead.
     await expect(viewer.locator('.react-flow__attribution')).toHaveCount(0);
   }
@@ -158,4 +181,23 @@ test('theme toggle switches the diagram colour mode', async ({ page }) => {
   // The canvas really changes colour, too.
   const bg = await viewer.evaluate((el) => getComputedStyle(el).getPropertyValue('--rv-canvas-bg'));
   expect(bg.trim()).toBe('#0f1217');
+});
+
+test('the navbar links to the editor, which is part of the build', async ({ page }) => {
+  await page.goto('');
+  const link = page.locator('.navbar').getByRole('link', { name: 'Editor', exact: true });
+  await expect(link).toHaveAttribute('href', '/relvista/editor/');
+  // Served by the editor's own e2e (`docusaurus serve` strips the folder's trailing slash).
+  const index = join(process.cwd(), 'build', 'editor', 'index.html');
+  expect(existsSync(index)).toBe(true);
+  expect(readFileSync(index, 'utf8')).toContain('<title>relvista editor</title>');
+});
+
+test('gallery diagrams link to the editor with their DBML', async ({ page }) => {
+  await page.goto('docs/gallery/01-minimal');
+  const viewer = await settled(page.locator('.relvista-diagram').first());
+  await expect(viewer.getByRole('link', { name: 'Open in editor' })).toHaveAttribute(
+    'href',
+    /^\/relvista\/editor\/#dbml=[A-Za-z0-9_-]+/,
+  );
 });

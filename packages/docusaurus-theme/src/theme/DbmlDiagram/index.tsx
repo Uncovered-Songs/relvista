@@ -88,7 +88,7 @@ const asJson = (text: string): unknown => JSON.parse(text);
 
 /**
  * The minimap would cover too much of a short diagram; otherwise the viewer decides ('auto':
- * larger diagrams in wide viewers only).
+ * larger diagrams in wide viewers, and any diagram with tables off-screen).
  */
 function minimapFor(height: number | string): 'auto' | false {
   return typeof height !== 'number' || height >= 360 ? 'auto' : false;
@@ -245,7 +245,7 @@ function ClientDiagram({
       ? layoutParsed.result.layout
       : null;
 
-  const editor = editorUrl ?? config.editorUrl;
+  const editor = (editorUrl ?? config.editorUrl) || undefined;
   const items = (toolbar ?? config.toolbar).filter((i) => i !== 'open-in-editor' || !!editor);
   return (
     <Suspense fallback={<Placeholder height={height} title={title} />}>

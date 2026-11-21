@@ -160,6 +160,70 @@ function relativeLuminance({ r, g, b }: Rgb): number {
   return 0.2126 * ch(r) + 0.7152 * ch(g) + 0.0722 * ch(b);
 }
 
+/** WCAG contrast ratio of two colours (1 to 21). */
+export function contrastRatio(a: Rgb, b: Rgb): number {
+  const la = relativeLuminance(a);
+  const lb = relativeLuminance(b);
+  return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+function toHsl({ r, g, b }: Rgb): [number, number, number] {
+  const [R, G, B] = [r / 255, g / 255, b / 255];
+  const max = Math.max(R, G, B);
+  const min = Math.min(R, G, B);
+  const l = (max + min) / 2;
+  if (max === min) return [0, 0, l];
+  const d = max - min;
+  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+  const h =
+    max === R
+      ? ((G - B) / d + (G < B ? 6 : 0)) / 6
+      : max === G
+        ? ((B - R) / d + 2) / 6
+        : ((R - G) / d + 4) / 6;
+  return [h, s, l];
+}
+
+function fromHsl(h: number, s: number, l: number): Rgb {
+  if (s === 0) return { r: l * 255, g: l * 255, b: l * 255 };
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+  const p = 2 * l - q;
+  const ch = (t: number) => {
+    const u = t < 0 ? t + 1 : t > 1 ? t - 1 : t;
+    if (u < 1 / 6) return p + (q - p) * 6 * u;
+    if (u < 1 / 2) return q;
+    if (u < 2 / 3) return p + (q - p) * (2 / 3 - u) * 6;
+    return p;
+  };
+  return { r: ch(h + 1 / 3) * 255, g: ch(h) * 255, b: ch(h - 1 / 3) * 255 };
+}
+
+/**
+ * `color` with its HSL lightness moved away from `bg` (lighter on a dark background, darker on a
+ * light one) just until it reaches `ratio` contrast against it, drawn at `opacity` over `bg`.
+ * Hue and saturation are kept.
+ */
+export function withContrast(color: Rgb, bg: Rgb, ratio: number, opacity = 1): Rgb {
+  const ok = (c: Rgb) => contrastRatio(mix(bg, c, opacity), bg) >= ratio;
+  if (ok(color)) return color;
+  const [h, s, l0] = toHsl(color);
+  const up = relativeLuminance(bg) < 0.5;
+  let lo = l0;
+  let hi = up ? 1 : 0;
+  // Bisection on the lightness: contrast grows monotonically towards white (or black).
+  // Rounded to whole channels, as `toHex` writes them, before testing.
+  const at = (l: number): Rgb => {
+    const c = fromHsl(h, s, l);
+    return { r: Math.round(c.r), g: Math.round(c.g), b: Math.round(c.b) };
+  };
+  for (let i = 0; i < 24; i++) {
+    const mid = (lo + hi) / 2;
+    if (ok(at(mid))) hi = mid;
+    else lo = mid;
+  }
+  return at(hi);
+}
+
 /** Readable text colour on top of `bg`: near-white on dark colours, near-black on light ones. */
 export function contrastText(bg: Rgb): string {
   return relativeLuminance(bg) > 0.45 ? '#1b2230' : '#ffffff';

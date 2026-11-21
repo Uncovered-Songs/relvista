@@ -1,9 +1,10 @@
 import Link from '@docusaurus/Link';
+import useBaseUrl from '@docusaurus/useBaseUrl';
 import useDocusaurusContext from '@docusaurus/useDocusaurusContext';
 import CodeBlock from '@theme/CodeBlock';
 import DbmlDiagram from '@theme/DbmlDiagram';
 import Layout from '@theme/Layout';
-import type { ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import ecommerce from '@site/../../examples/02-ecommerce.dbml';
 import styles from './index.module.css';
 
@@ -70,6 +71,29 @@ Table posts {
   title varchar
 }`;
 
+/** A link that opens `source` in the editor (share hash built in the browser, codec loaded lazily). */
+function EditInEditor({ source, children }: { source: string; children: ReactNode }): ReactNode {
+  const editorUrl = useBaseUrl('/editor/');
+  const [href, setHref] = useState(editorUrl);
+  useEffect(() => {
+    let alive = true;
+    void import(/* webpackChunkName: "relvista-viewer" */ '@relvista/renderer').then(
+      async ({ createEditorLink }) => {
+        const link = await createEditorLink(editorUrl, { dbml: source });
+        if (alive) setHref(link);
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [editorUrl, source]);
+  return (
+    <a className="button button--link" href={href} data-testid="edit-in-editor">
+      {children}
+    </a>
+  );
+}
+
 export default function Home(): ReactNode {
   const { siteConfig } = useDocusaurusContext();
   return (
@@ -87,15 +111,22 @@ export default function Home(): ReactNode {
             <p className={styles.tagline}>{siteConfig.tagline}</p>
             <p className={styles.lead}>
               Turn <a href="https://dbml.dbdiagram.io/docs/">DBML</a> schemas into interactive
-              entity-relationship diagrams inside Docusaurus. No account, no server, no screenshots
-              that go stale.
+              entity-relationship diagrams: edit them in the browser with a live diagram, or render
+              them inside Docusaurus. No account, no server, no screenshots that go stale.
             </p>
             <div className={styles.buttons}>
-              <Link className="button button--primary button--lg" to="/docs/getting-started">
+              <Link
+                className="button button--primary button--lg"
+                to="pathname:///editor/"
+                target="_self"
+              >
+                Open the editor
+              </Link>
+              <Link className="button button--secondary button--lg" to="/docs/getting-started">
                 Get started
               </Link>
-              <Link className="button button--secondary button--lg" to="/docs/gallery">
-                Browse the gallery
+              <Link className="button button--link button--lg" to="/docs/gallery">
+                Browse the gallery →
               </Link>
             </div>
             <div className={styles.install}>
@@ -145,6 +176,7 @@ export default function Home(): ReactNode {
               <Link className="button button--primary" to="/docs/getting-started">
                 Add it to your site
               </Link>
+              <EditInEditor source={BLOG}>Edit this example in the editor</EditInEditor>
               <Link className="button button--link" to="/docs/usage">
                 All options →
               </Link>

@@ -3,6 +3,8 @@
 export * from './svg/index.js';
 export * from './export/index.js';
 export * from './viewer/index.js';
+export * from './canvas/index.js';
+export * from './share/index.js';
 export {
   PALETTES,
   cssVarName,

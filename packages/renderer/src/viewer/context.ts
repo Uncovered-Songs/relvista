@@ -5,8 +5,17 @@ import type { HighlightSets, HSide } from '../svg/routing.js';
 export interface ViewerState {
   detailLevel: DetailLevel;
   lit: HighlightSets | null;
+  /** Whether what `lit` leaves out is dimmed (hover), or only `lit` is emphasised (highlight). */
+  dim: boolean;
   hoveredId: string | null;
+  /** Table whose details card is open. */
   selectedId: string | null;
+  /** `highlightedNodeId` of the canvas (ring + lit refs). */
+  highlightedId: string | null;
+  /** Nodes selected in the editable canvas. */
+  selection: ReadonlySet<string>;
+  /** Groups get a header band that can be clicked (and, editable, dragged). */
+  groupHandles: boolean;
   /** Table id → handle ids its refs attach to (only those handles are rendered). */
   handles: ReadonlyMap<string, ReadonlySet<string>>;
 }
@@ -14,8 +23,12 @@ export interface ViewerState {
 export const ViewerContext = createContext<ViewerState>({
   detailLevel: 'all',
   lit: null,
+  dim: true,
   hoveredId: null,
   selectedId: null,
+  highlightedId: null,
+  selection: new Set(),
+  groupHandles: false,
   handles: new Map(),
 });
 

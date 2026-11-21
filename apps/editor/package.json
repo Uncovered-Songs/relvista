@@ -1,0 +1,39 @@
+{
+  "name": "relvista-editor",
+  "version": "0.0.0",
+  "private": true,
+  "description": "relvista editor website: DBML code editor with a live ER diagram (deployed at /relvista/editor/)",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc -p tsconfig.json --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
+  },
+  "dependencies": {
+    "@dbml/core": "12.1.0",
+    "@dbml/parse": "12.1.0",
+    "@relvista/core": "workspace:*",
+    "@relvista/renderer": "workspace:*",
+    "elkjs": "0.12.1",
+    "monaco-editor": "0.57.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1"
+  },
+  "devDependencies": {
+    "@axe-core/playwright": "4.14.0",
+    "@playwright/test": "1.65.1",
+    "@testing-library/react": "^16",
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@vitejs/plugin-react": "5.2.0",
+    "jsdom": "^27",
+    "typescript": "~5.9.3",
+    "vite": "7.3.8",
+    "vitest": "^3.2.4"
+  }
+}

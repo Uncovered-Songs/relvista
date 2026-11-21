@@ -6,11 +6,12 @@
     "sync": "node scripts/sync-assets.mjs",
     "prestart": "node scripts/sync-assets.mjs",
     "start": "docusaurus start",
-    "build": "node scripts/sync-assets.mjs && docusaurus build",
+    "build": "node scripts/sync-assets.mjs && docusaurus build && node scripts/copy-editor.mjs",
     "serve": "docusaurus serve",
     "clear": "docusaurus clear",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "serve:site": "node scripts/serve-site.mjs"
   },
   "dependencies": {
     "@docusaurus/core": "3.10.2",
@@ -19,6 +20,7 @@
     "@mdx-js/react": "^3.1.1",
     "@relvista/core": "workspace:*",
     "@relvista/docusaurus-theme": "workspace:*",
+    "@relvista/renderer": "workspace:*",
     "clsx": "^2.1.1",
     "prism-react-renderer": "^2.4.1",
     "react": "^19",
@@ -32,6 +34,7 @@
     "@playwright/test": "1.65.1",
     "@types/node": "^24",
     "@types/react": "^19",
+    "relvista-editor": "workspace:*",
     "typescript": "~5.9.3"
   },
   "browserslist": {

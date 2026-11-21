@@ -49,6 +49,9 @@ const config: Config = {
       items: [
         { type: 'docSidebar', sidebarId: 'docs', position: 'left', label: 'Docs' },
         { to: '/docs/gallery', label: 'Gallery', position: 'left' },
+        // The editor is a separate Vite app copied into build/editor/ (scripts/copy-editor.mjs).
+        // `pathname://` links open in a new tab by default; the editor is part of this site.
+        { to: 'pathname:///editor/', label: 'Editor', position: 'left', target: '_self' },
         { href: repoUrl, label: 'GitHub', position: 'right' },
       ],
     },
@@ -59,6 +62,7 @@ const config: Config = {
           title: 'Docs',
           items: [
             { label: 'Getting started', to: '/docs/getting-started' },
+            { label: 'Editor', to: '/docs/editor' },
             { label: 'Usage', to: '/docs/usage' },
             { label: 'Layout file', to: '/docs/layout-file' },
             { label: 'Gallery', to: '/docs/gallery' },
@@ -82,6 +86,8 @@ const config: Config = {
     },
     dbml: {
       height: 480,
+      // Local builds link to their own copy of the editor (the theme default is the hosted one).
+      editorUrl: '/relvista/editor/',
     },
   } satisfies Preset.ThemeConfig,
 };

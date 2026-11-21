@@ -16,7 +16,7 @@ concurrency:
 
 jobs:
   build:
-    name: Build docs site
+    name: Build docs site and editor
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -35,8 +35,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build packages and docs
+      # Builds core → renderer → theme → editor → docs; the docs build copies the editor into
+      # apps/docs/build/editor/, so one artifact serves /relvista/ and /relvista/editor/.
+      - name: Build packages, editor and docs
         run: pnpm docs:build
+
+      - name: Check the editor is in the artifact
+        run: test -f apps/docs/build/editor/index.html
 
       - name: Configure Pages
         uses: actions/configure-pages@v6

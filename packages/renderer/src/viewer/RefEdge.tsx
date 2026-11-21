@@ -17,7 +17,7 @@ export const RefEdge = memo(function RefEdge({
 }: EdgeProps<RefFlowEdge>): ReactElement | null {
   const v = useViewerState();
   if (!data) return null;
-  const state = v.lit ? (v.lit.refs.has(id) ? 'highlight' : 'dim') : 'normal';
+  const state = v.lit ? (v.lit.refs.has(id) ? 'highlight' : v.dim ? 'dim' : 'normal') : 'normal';
   return <RefSvg refModel={data.refModel} route={data.route} state={state} />;
 });
 

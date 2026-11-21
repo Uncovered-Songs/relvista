@@ -8,6 +8,9 @@ description: Add the relvista theme to a Docusaurus site and draw your first DBM
 as interactive entity-relationship diagrams. The Docusaurus theme turns every ` ```dbml ` code fence
 into a diagram and adds a `<DbmlDiagram>` component for `.dbml` files.
 
+Just want to draw or edit a schema? Use the [editor](./editor.md) in your browser: no install, and
+your files stay on your disk. This page is about adding diagrams to a Docusaurus site.
+
 ## Requirements
 
 - Docusaurus 3.6 or later (tested with 3.10) with the classic theme or preset
@@ -42,12 +45,12 @@ const config: Config = {
 export default config;
 ```
 
-| `themeConfig.dbml` | Default      | Meaning                                                                                             |
-| ------------------ | ------------ | --------------------------------------------------------------------------------------------------- |
-| `height`           | `480`        | Height of each diagram. A number is pixels; a string is any CSS length.                             |
-| `detailLevel`      | `'all'`      | `all` columns, `keys` only (primary and foreign keys, unique columns), or table `names` only.       |
-| `toolbar`          | every button | Toolbar buttons in order: `view`, `zoom`, `fit`, `fullscreen`, `export`, `print`, `open-in-editor`. |
-| `editorUrl`        | none         | Base URL of a relvista editor; shows an "Open in editor" button that passes the DBML along.         |
+| `themeConfig.dbml` | Default       | Meaning                                                                                             |
+| ------------------ | ------------- | --------------------------------------------------------------------------------------------------- |
+| `height`           | `480`         | Height of each diagram. A number is pixels; a string is any CSS length.                             |
+| `detailLevel`      | `'all'`       | `all` columns, `keys` only (primary and foreign keys, unique columns), or table `names` only.       |
+| `toolbar`          | every button  | Toolbar buttons in order: `view`, `zoom`, `fit`, `fullscreen`, `export`, `print`, `open-in-editor`. |
+| `editorUrl`        | hosted editor | Base URL of the relvista [editor](./editor.md) for the "Open in editor" button; `false` hides it.   |
 
 ## Your first diagram
 
@@ -84,6 +87,7 @@ Table posts {
 ```
 
 Drag the tables, scroll to zoom, hover a table to trace its relationships and click it for details.
+**Open in editor** in the toolbar opens the diagram in the [editor](./editor.md).
 
 ## TypeScript
 

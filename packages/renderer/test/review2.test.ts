@@ -93,6 +93,41 @@ describe('initialViewport', () => {
     }
   });
 
+  it('never skips the first column to show one more whole table', () => {
+    // Column 0 holds one table, columns 1-3 two each. Starting at column 1 would show six whole
+    // tables instead of five, but hide the first one (its refs would run off the left edge).
+    const grid: Box[] = [{ x: 0, y: 0, width: 300, height: 200 }];
+    for (let c = 1; c <= 3; c++)
+      for (const y of [0, 250]) grid.push({ x: c * 400, y, width: 300, height: 200 });
+    const vp = initialViewport({
+      ...base,
+      nodes: grid,
+      bounds: { x: 0, y: 0, width: 1500, height: 450 },
+      minZoom: 0.85,
+    })!;
+    expect(screen(grid[0]!, vp).x).toBeCloseTo(PAD.left);
+  });
+
+  it('shows the first declared table whole when the window can hold it', () => {
+    // A 6 × 6 grid; the anchor sits in the middle, the densest window would start top-left.
+    const grid: Box[] = [];
+    for (let r = 0; r < 6; r++)
+      for (let c = 0; c < 6; c++) grid.push({ x: c * 400, y: r * 300, width: 300, height: 200 });
+    const anchor = grid[3 * 6 + 3]!;
+    const vp = initialViewport({
+      ...base,
+      nodes: grid,
+      anchor,
+      bounds: { x: 0, y: 0, width: 2300, height: 1700 },
+      minZoom: 0.85,
+    })!;
+    const s = screen(anchor, vp);
+    expect(s.x).toBeGreaterThanOrEqual(PAD.left - 0.01);
+    expect(s.x + s.width).toBeLessThanOrEqual(1000 - PAD.right + 0.01);
+    expect(s.y).toBeGreaterThanOrEqual(PAD.top - 0.01);
+    expect(s.y + s.height).toBeLessThanOrEqual(500 - PAD.bottom + 0.01);
+  });
+
   it('prefers the dense region over empty corridors', () => {
     // A sparse table far top-left, a cluster of four bottom-right.
     const cluster: Box[] = [

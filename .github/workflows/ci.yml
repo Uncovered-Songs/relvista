@@ -44,7 +44,8 @@ jobs:
         run: pnpm lint
 
       # Packages type-check and test against each other's built output (dist/, lib/).
-      # Also builds the docs site (apps/docs) used by the e2e gate below.
+      # Also builds the editor (apps/editor) and the docs site (apps/docs), which copies the editor
+      # into build/editor/: the same Pages artifact deploy-docs.yml publishes, used by the e2e below.
       - name: Build
         run: pnpm build
 
@@ -57,16 +58,22 @@ jobs:
       - name: Validate examples
         run: pnpm validate:examples
 
+      # Docs and editor pin the same @playwright/test, so one browser install serves both.
       - name: Install Playwright Chromium
         run: pnpm --filter relvista-docs exec playwright install --with-deps chromium
 
       - name: Phase-1 gate (docs site renders every example)
-        run: pnpm test:e2e
+        run: pnpm test:e2e:docs
 
-      - name: Upload Playwright report
+      - name: Phase-2 gate (editor, incl. byte-exact round trip of every example)
+        run: pnpm test:e2e:editor
+
+      - name: Upload Playwright results
         if: failure()
         uses: actions/upload-artifact@v7
         with:
-          name: playwright-report
-          path: apps/docs/test-results/
+          name: playwright-results
+          path: |
+            apps/docs/test-results/
+            apps/editor/test-results/
           retention-days: 7

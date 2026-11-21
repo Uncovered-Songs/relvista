@@ -15,3 +15,5 @@ apps/docs/static/dbml/
 apps/docs/test-results/
 apps/docs/playwright-report/
 packages/docusaurus-theme/lib/
+apps/editor/test-results/
+apps/editor/playwright-report/

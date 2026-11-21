@@ -57,6 +57,20 @@ describe('DbmlDiagram', () => {
     expect(viewerProps.at(-1)!['minimap']).toBe('auto');
   });
 
+  it('links "Open in editor" to the hosted editor by default; editorUrl={false} hides it', async () => {
+    render(<DbmlDiagram value={'Table a {\n  id int\n}'} />);
+    await settle();
+    expect(viewerProps.at(-1)!['editorUrl']).toBe(
+      'https://uncovered-songs.github.io/relvista/editor/',
+    );
+    expect(viewerProps.at(-1)!['toolbar']).toContain('open-in-editor');
+    cleanup();
+    render(<DbmlDiagram value={'Table a {\n  id int\n}'} editorUrl={false} />);
+    await settle();
+    expect(viewerProps.at(-1)!['editorUrl']).toBeUndefined();
+    expect(viewerProps.at(-1)!['toolbar']).not.toContain('open-in-editor');
+  });
+
   it('shows a loading placeholder, then the fetched source', async () => {
     stubFetch({ '/s.dbml': { status: 200, body: 'Table a {\n  id int\n}' } });
     render(<DbmlDiagram src="/s.dbml" title="Fetched" />);

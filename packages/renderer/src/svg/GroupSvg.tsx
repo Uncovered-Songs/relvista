@@ -1,6 +1,6 @@
 import { METRICS, estimateTextWidth, type Box, type TableGroup } from '@relvista/core';
 import { memo, type ReactElement } from 'react';
-import { safeColor } from '../theme.js';
+import { PALETTES, parseHex, safeColor, toHex, withContrast } from '../theme.js';
 import { useColors } from './context.js';
 import { baseline, truncate } from './text.js';
 
@@ -16,8 +16,14 @@ export const GroupSvg = memo(function GroupSvg({
   box,
   dimmed,
 }: GroupSvgProps): ReactElement {
-  const { c } = useColors();
+  const { c, mode } = useColors();
   const color = safeColor(group.color) ?? c('groupDefault');
+  // A dark group colour on the dark canvas: label and border lightened to stay legible (the tint
+  // keeps the colour as given).
+  const rgb = mode === 'dark' ? parseHex(color) : null;
+  const bg = parseHex(PALETTES.dark.canvasBg)!;
+  const text = rgb ? toHex(withContrast(rgb, bg, 4.5)) : color;
+  const stroke = rgb ? toHex(withContrast(rgb, bg, 3, 0.5)) : color;
   const r = METRICS.cornerRadius + 4;
   const fs = METRICS.fontSize.tableName;
   const label = truncate(
@@ -39,7 +45,7 @@ export const GroupSvg = memo(function GroupSvg({
         height={box.height}
         rx={r}
         ry={r}
-        style={{ fill: color, stroke: color }}
+        style={{ fill: color, stroke }}
         fillOpacity={0.07}
         strokeOpacity={0.5}
         strokeWidth={1.2}
@@ -53,7 +59,7 @@ export const GroupSvg = memo(function GroupSvg({
         x={METRICS.groupPadding / 2 + 2}
         y={baseline(METRICS.groupHeaderHeight / 2, fs)}
         style={{
-          fill: color,
+          fill: text,
           fontFamily: METRICS.fontFamily,
           fontSize: fs,
           fontWeight: METRICS.fontWeight.tableName,

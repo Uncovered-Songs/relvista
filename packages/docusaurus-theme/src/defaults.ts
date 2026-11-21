@@ -9,8 +9,11 @@ export interface DbmlThemeConfig {
   height: number | string;
   /** Toolbar buttons, in order. Default: every button. */
   toolbar: ToolbarItem[];
-  /** Base URL of the relvista editor for the "Open in editor" button. Omit to hide the button. */
-  editorUrl?: string;
+  /**
+   * Base URL of the relvista editor for the "Open in editor" button. Defaults to the hosted editor
+   * ({@link DEFAULT_EDITOR_URL}); `false` hides the button.
+   */
+  editorUrl: string | false;
   /** Default detail level: every column, keys only, or table names only. Default `all`. */
   detailLevel: DetailLevel;
 }
@@ -18,6 +21,12 @@ export interface DbmlThemeConfig {
 export interface ThemeConfig {
   dbml: DbmlThemeConfig;
 }
+
+/**
+ * The hosted editor. Same value as `DEFAULT_EDITOR_URL` in `@relvista/renderer` (a test keeps them
+ * equal); repeated here so config validation in Node never loads the renderer.
+ */
+export const DEFAULT_EDITOR_URL = 'https://uncovered-songs.github.io/relvista/editor/';
 
 export const TOOLBAR_ITEMS: readonly ToolbarItem[] = [
   'view',
@@ -33,6 +42,7 @@ export const DEFAULT_THEME_CONFIG: ThemeConfig = {
   dbml: {
     height: 480,
     toolbar: [...TOOLBAR_ITEMS],
+    editorUrl: DEFAULT_EDITOR_URL,
     detailLevel: 'all',
   },
 };

@@ -13,3 +13,5 @@ apps/docs/static/schemas/
 apps/docs/static/dbml/
 apps/docs/test-results/
 apps/docs/playwright-report/
+apps/editor/test-results/
+apps/editor/playwright-report/

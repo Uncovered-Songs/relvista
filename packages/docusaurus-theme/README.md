@@ -22,7 +22,7 @@ export default {
       height: 480, // default diagram height: px, or any CSS length
       detailLevel: 'all', // 'all' | 'keys' | 'names'
       toolbar: ['view', 'zoom', 'fit', 'fullscreen', 'export', 'print', 'open-in-editor'],
-      // editorUrl: 'https://…', // shows "Open in editor"
+      // editorUrl: false, // hides "Open in editor" (default: the hosted relvista editor)
     },
   },
 };
