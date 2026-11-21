@@ -34,7 +34,7 @@
     "@docusaurus/tsconfig": "3.10.2",
     "@docusaurus/types": "3.10.2",
     "@playwright/test": "1.65.1",
-    "@types/node": "^24",
+    "@types/node": "^26",
     "@types/react": "^19",
     "relvista-editor": "workspace:*",
     "typedoc": "0.28.20",
