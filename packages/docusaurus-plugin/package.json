@@ -87,7 +87,7 @@
     "react": "^19",
     "react-dom": "^19",
     "typescript": "~5.9.3",
-    "vitest": "^3.2.4",
+    "vitest": "^5.1.1",
     "prism-react-renderer": "^2.4.1",
     "@types/node": "^24",
     "@types/babel__core": "^7.20.5"
